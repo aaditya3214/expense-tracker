@@ -26,34 +26,41 @@ export default function CreateEntry() {
             
             <Head title="Add Expense" />
 
-            <div className="flex justify-between items-center mb-8">
-                <h2 className="text-2xl font-bold text-blue-600">Enter New Purchase Product Details</h2>
-                <Link href="/expenses" className="text-blue-600 font-bold hover:underline">
-                    ← Back to History
-                </Link>
+            <div className="flex flex-col md:flex-row justify-between items-center mb-8 pb-4 border-b gap-4">
+                <h2 className="text-2xl font-bold text-blue-600 text-center md:text-left">Enter New Purchase Details</h2>
+                
+                <div className="flex gap-3">
+                    {/* 🚀 PRO HOVER ON LINKS */}
+                    <Link href="/" className="bg-gray-800 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-900 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 whitespace-nowrap flex items-center gap-2">
+                        🏠 Dashboard
+                    </Link>
+                    <Link href="/expenses" className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-300 whitespace-nowrap flex items-center gap-2">
+                        📄 View History
+                    </Link>
+                </div>
             </div>
 
-            <div className="bg-white p-6 rounded-lg shadow-sm mb-6 border-2 border-dashed border-green-400">
+            <div className="bg-white p-6 rounded-xl shadow-sm mb-6 border-2 border-dashed border-green-400 hover:shadow-md transition-all duration-300">
                 <h3 className="text-lg font-bold mb-3 text-green-600">Bulk Upload (Upload CSV File)</h3>
-                <form onSubmit={submitCsv} className="flex gap-4 items-center">
-                    <input type="file" accept=".csv" onChange={e => setFileData('csv_file', e.target.files[0])} className="border p-2 rounded w-full" required />
-                    <button type="submit" disabled={fileProcessing} className="bg-green-600 text-white font-bold py-2 px-6 rounded hover:bg-green-700 whitespace-nowrap">
+                <form onSubmit={submitCsv} className="flex flex-col md:flex-row gap-4 items-center">
+                    <input type="file" accept=".csv" onChange={e => setFileData('csv_file', e.target.files[0])} className="border p-2 rounded w-full cursor-pointer" required />
+                    
+                    {/* 🚀 PRO HOVER ON SUBMIT BUTTON */}
+                    <button type="submit" disabled={fileProcessing} className="bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700 hover:-translate-y-1 hover:shadow-lg hover:shadow-green-500/30 transition-all duration-300 whitespace-nowrap w-full md:w-auto">
                         Upload Data
                     </button>
                 </form>
             </div>
 
-            <form onSubmit={submit} className="grid grid-cols-2 gap-4 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="col-span-2 text-lg font-bold mb-2 text-blue-600">Manual Entry</h3>
+            <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300">
+                <h3 className="col-span-1 md:col-span-2 text-lg font-bold mb-2 text-blue-600">Manual Entry</h3>
                 
-                <input type="text" placeholder="HSN (Optional)" value={data.hsn} onChange={e => setData('hsn', e.target.value)} className="border p-3 rounded" />
-                
-                <input type="text" placeholder="Particulars (Item Name)" value={data.particulars} onChange={e => setData('particulars', e.target.value)} required className="border p-3 rounded" />
+                <input type="text" placeholder="HSN (Optional)" value={data.hsn} onChange={e => setData('hsn', e.target.value)} className="border p-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" />
+                <input type="text" placeholder="Particulars (Item Name)" value={data.particulars} onChange={e => setData('particulars', e.target.value)} required className="border p-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" />
                 
                 <div className="flex gap-2">
-                    <input type="number" step="0.001" placeholder="Quantity (e.g. 1.500)" value={data.qty_kg} onChange={e => setData('qty_kg', e.target.value)} required className="border p-3 rounded w-2/3" />
-                    
-                    <select value={data.unit} onChange={e => setData('unit', e.target.value)} className="border p-3 rounded w-1/3 bg-gray-50 text-gray-700 font-semibold cursor-pointer hover:bg-gray-100">
+                    <input type="number" step="0.001" placeholder="Quantity (e.g. 1.500)" value={data.qty_kg} onChange={e => setData('qty_kg', e.target.value)} required className="border p-3 rounded-lg w-2/3 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" />
+                    <select value={data.unit} onChange={e => setData('unit', e.target.value)} className="border p-3 rounded-lg w-1/3 bg-gray-50 text-gray-700 font-semibold cursor-pointer hover:bg-gray-100 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
                         <option value="kg">KG</option>
                         <option value="g">Gram (g)</option>
                         <option value="l">Liter (L)</option>
@@ -63,12 +70,12 @@ export default function CreateEntry() {
                     </select>
                 </div>
 
-                <input type="number" step="0.01" placeholder="Rate (e.g. 45.50)" value={data.n_rate} onChange={e => setData('n_rate', e.target.value)} required className="border p-3 rounded" />
+                <input type="number" step="0.01" placeholder="Rate (e.g. 45.50)" value={data.n_rate} onChange={e => setData('n_rate', e.target.value)} required className="border p-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" />
+                <input type="number" step="0.01" placeholder="Total Value" value={data.value} onChange={e => setData('value', e.target.value)} required className="border p-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" />
                 
-                <input type="number" step="0.01" placeholder="Total Value" value={data.value} onChange={e => setData('value', e.target.value)} required className="border p-3 rounded" />
-                
-                <button type="submit" disabled={processing} className="bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition col-span-2 mt-2">
-                    Save Item
+                {/* 🚀 PRO HOVER ON SAVE BUTTON */}
+                <button type="submit" disabled={processing} className="bg-blue-600 text-white font-black text-lg tracking-wide py-3 rounded-lg shadow-md hover:bg-blue-700 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-500/40 transition-all duration-300 col-span-1 md:col-span-2 mt-2">
+                    SAVE ITEM
                 </button>
             </form>
         </div>

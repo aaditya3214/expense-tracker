@@ -1,26 +1,129 @@
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head } from '@inertiajs/react';
+import React from 'react';
+import { Head, Link } from '@inertiajs/react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
-export default function Dashboard() {
+export default function Dashboard({ monthlyData, itemData, costliestItem }) {
+    
+    const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+
+    // Safe Data Parsing
+    const safeMonthlyData = monthlyData.map(item => ({ ...item, total: Number(item.total) }));
+    const safeItemData = itemData.map(item => ({ ...item, value: Number(item.value) }));
+    const safeCostliest = costliestItem || { name: 'N/A', price: 0 };
+
+    // Calculations
+    const totalExpense = safeMonthlyData.reduce((sum, item) => sum + item.total, 0);
+    const highestMonth = safeMonthlyData.length > 0 ? safeMonthlyData.reduce((max, item) => (item.total > max.total ? item : max), safeMonthlyData[0]) : { month: 'N/A', total: 0 };
+    const topItem = safeItemData.length > 0 ? safeItemData[0] : { name: 'N/A', value: 0 };
+
     return (
-        <AuthenticatedLayout
-            header={
-                <h2 className="text-xl font-semibold leading-tight text-gray-800">
-                    Dashboard
-                </h2>
-            }
-        >
+        <div className="min-h-screen bg-gray-50 p-6 md:p-10">
             <Head title="Dashboard" />
 
-            <div className="py-12">
-                <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
-                    <div className="overflow-hidden bg-white shadow-sm sm:rounded-lg">
-                        <div className="p-6 text-gray-900">
-                            You're logged in!
-                        </div>
+            <div className="max-w-7xl mx-auto">
+                
+                {/* --- HEADER --- */}
+                <div className="flex flex-col md:flex-row justify-between items-center mb-8 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                    <div className="mb-4 md:mb-0 text-center md:text-left">
+                        <h2 className="text-3xl font-black text-blue-700 tracking-tight">Expenses Dashboard</h2>
+                        <p className="text-gray-500 font-medium mt-1">Purchase Product Summary</p>
+                    </div>
+                    <div className="flex gap-4">
+                        <Link href="/expenses" className="bg-gray-800 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-900 hover:-translate-y-1 hover:shadow-lg transition-all duration-300">
+                            📄 View History
+                        </Link>
+                        <Link href="/expenses/create" className="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-300">
+                            + Add Expense
+                        </Link>
                     </div>
                 </div>
+
+                {/* --- 🚀 4 KPI CARDS GRID --- */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    
+                    <div className="group bg-white rounded-2xl shadow-sm border border-gray-200 p-5 flex items-center border-b-4 border-b-blue-600 hover:-translate-y-1 hover:shadow-xl transition-all duration-300 cursor-default">
+                        <div className="flex-1">
+                            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total Expenses</p>
+                            <h3 className="text-2xl font-black text-gray-800 mt-1">₹{totalExpense.toLocaleString('en-IN')}</h3>
+                        </div>
+                        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-xl shadow-inner shrink-0 transition-all duration-300 group-hover:scale-125 group-hover:bg-blue-100 group-hover:rotate-12">
+                            💰
+                        </div>
+                    </div>
+
+                    <div className="group bg-white rounded-2xl shadow-sm border border-gray-200 p-5 flex items-center border-b-4 border-b-green-500 hover:-translate-y-1 hover:shadow-xl transition-all duration-300 cursor-default">
+                        <div className="flex-1">
+                            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Highest Month</p>
+                            <h3 className="text-xl font-black text-gray-800 mt-1">{highestMonth.month}</h3>
+                            <p className="text-xs font-bold text-green-600 mt-1">₹{highestMonth.total.toLocaleString('en-IN')}</p>
+                        </div>
+                        <div className="w-12 h-12 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-xl shadow-inner shrink-0 transition-all duration-300 group-hover:scale-125 group-hover:bg-green-100 group-hover:-rotate-12">
+                            📈
+                        </div>
+                    </div>
+
+                    <div className="group bg-white rounded-2xl shadow-sm border border-gray-200 p-5 flex items-center border-b-4 border-b-orange-500 hover:-translate-y-1 hover:shadow-xl transition-all duration-300 cursor-default">
+                        <div className="flex-1 overflow-hidden">
+                            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Most Spent On</p>
+                            <h3 className="text-sm font-black text-gray-800 mt-1 truncate" title={topItem.name}>{topItem.name}</h3>
+                            <p className="text-xs font-bold text-orange-600 mt-1">Total: ₹{topItem.value.toLocaleString('en-IN')}</p>
+                        </div>
+                        <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center text-xl shadow-inner shrink-0 ml-2 transition-all duration-300 group-hover:scale-125 group-hover:bg-orange-100 group-hover:rotate-12">
+                            🛒
+                        </div>
+                    </div>
+
+                    <div className="group bg-white rounded-2xl shadow-sm border border-gray-200 p-5 flex items-center border-b-4 border-b-purple-500 hover:-translate-y-1 hover:shadow-xl transition-all duration-300 cursor-default">
+                        <div className="flex-1 overflow-hidden">
+                            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Costliest Single Item</p>
+                            <h3 className="text-sm font-black text-gray-800 mt-1 truncate" title={safeCostliest.name}>{safeCostliest.name}</h3>
+                            <p className="text-xs font-bold text-purple-600 mt-1">Price: ₹{safeCostliest.price.toLocaleString('en-IN')} / unit</p>
+                        </div>
+                        <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center text-xl shadow-inner shrink-0 ml-2 transition-all duration-300 group-hover:scale-125 group-hover:bg-purple-100 group-hover:-rotate-12">
+                            💎
+                        </div>
+                    </div>
+
+                </div>
+
+                {/* --- 🚀 CHARTS SECTION (HOVER ADDED HERE) --- */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    
+                    {/* A. Bar Chart Card */}
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+                        <h3 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">📊 Monthly Expenditure</h3>
+                        <div className="h-[400px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={safeMonthlyData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontWeight: 600 }} />
+                                    <YAxis tickFormatter={(value) => `₹${value}`} axisLine={false} tickLine={false} tick={{ fill: '#6B7280' }} />
+                                    <Tooltip cursor={{ fill: '#F3F4F6' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
+                                    <Bar dataKey="total" name="Total Spent (₹)" fill="#3B82F6" radius={[6, 6, 0, 0]} barSize={40} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {/* B. Pie Chart Card */}
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+                        <h3 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">🏆 Top 5 Expenses</h3>
+                        <div className="h-[400px] flex justify-center items-center">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie data={safeItemData} cx="50%" cy="45%" innerRadius={80} outerRadius={120} paddingAngle={5} dataKey="value">
+                                        {safeItemData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                                    </Pie>
+                                    <Tooltip formatter={(value) => `₹${value}`} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
+                                    <Legend verticalAlign="bottom" height={80} iconType="circle" />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                </div>
+
             </div>
-        </AuthenticatedLayout>
+        </div>
     );
 }
