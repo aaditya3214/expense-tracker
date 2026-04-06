@@ -3,55 +3,65 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
+use App\Models\DmartReceipt; 
 use Carbon\Carbon;
 
 class ExpenseSeeder extends Seeder
 {
-    public function run()
+    public function run(): void
     {
-        // 1. आपके असली टेबल 'dmart_receipts' का पुराना डेटा डिलीट करें
-        DB::table('dmart_receipts')->truncate(); 
+        // 1. पुरानी सारी एंट्रीज़ मिटा दें
+        DmartReceipt::truncate();
 
-        // 2. D-Mart के आइटम्स की लिस्ट
         $items = [
-            ['hsn' => '1001', 'name' => 'WHEAT FLOUR (AASHIRVAAD)', 'unit' => 'KG', 'min_qty' => 5, 'max_qty' => 10, 'rate' => 45.50],
-            ['hsn' => '1006', 'name' => 'BASMATI RICE (INDIA GATE)', 'unit' => 'KG', 'min_qty' => 5, 'max_qty' => 20, 'rate' => 120.00],
-            ['hsn' => '1508', 'name' => 'SUNFLOWER OIL (FORTUNE)', 'unit' => 'LTR', 'min_qty' => 1, 'max_qty' => 5, 'rate' => 145.00],
-            ['hsn' => '0401', 'name' => 'AMUL TAAZA MILK', 'unit' => 'LTR', 'min_qty' => 1, 'max_qty' => 2, 'rate' => 54.00],
-            ['hsn' => '1701', 'name' => 'MADHUR SUGAR', 'unit' => 'KG', 'min_qty' => 2, 'max_qty' => 5, 'rate' => 42.00],
-            ['hsn' => '3401', 'name' => 'DETTOL SOAP (PACK OF 4)', 'unit' => 'PCS', 'min_qty' => 1, 'max_qty' => 3, 'rate' => 140.00],
-            ['hsn' => '3305', 'name' => 'HEAD & SHOULDERS SHAMPOO', 'unit' => 'PCS', 'min_qty' => 1, 'max_qty' => 2, 'rate' => 320.00],
-            ['hsn' => '0713', 'name' => 'TATA SAMPANN TOOR DAL', 'unit' => 'KG', 'min_qty' => 1, 'max_qty' => 3, 'rate' => 165.00],
+            ['hsn' => '1006', 'name' => 'BASMATI RICE (INDIA GATE)', 'unit' => 'kg', 'min_qty' => 1, 'max_qty' => 5, 'rate' => 195],
+            ['hsn' => '1101', 'name' => 'WHEAT FLOUR (AASHIRVAAD)', 'unit' => 'kg', 'min_qty' => 5, 'max_qty' => 10, 'rate' => 52],
+            ['hsn' => '1512', 'name' => 'SUNFLOWER OIL (FORTUNE)', 'unit' => 'l', 'min_qty' => 1, 'max_qty' => 3, 'rate' => 145],
+            ['hsn' => '1509', 'name' => 'FIGARO OLIVE OIL', 'unit' => 'l', 'min_qty' => 1, 'max_qty' => 1, 'rate' => 799], 
+            ['hsn' => '1902', 'name' => 'MAGGI NOODLES (PACK OF 6)', 'unit' => 'pkt', 'min_qty' => 1, 'max_qty' => 2, 'rate' => 84],
+            ['hsn' => '3305', 'name' => 'HEAD & SHOULDERS SHAMPOO', 'unit' => 'pcs', 'min_qty' => 1, 'max_qty' => 1, 'rate' => 340],
+            ['hsn' => '3401', 'name' => 'DETTOL SOAP (PACK OF 4)', 'unit' => 'pkt', 'min_qty' => 1, 'max_qty' => 2, 'rate' => 125],
+            ['hsn' => '0713', 'name' => 'TOOR DAL (TATA SAMPANN)', 'unit' => 'kg', 'min_qty' => 1, 'max_qty' => 2, 'rate' => 165],
+            ['hsn' => '1701', 'name' => 'SUGAR (MADHUR)', 'unit' => 'kg', 'min_qty' => 1, 'max_qty' => 5, 'rate' => 45],
+            ['hsn' => '2501', 'name' => 'TATA SALT', 'unit' => 'kg', 'min_qty' => 1, 'max_qty' => 2, 'rate' => 28],
+            ['hsn' => '0405', 'name' => 'AMUL BUTTER', 'unit' => 'pcs', 'min_qty' => 1, 'max_qty' => 2, 'rate' => 55],
+            ['hsn' => '2009', 'name' => 'AMLA JUICE (PATANJALI)', 'unit' => 'pcs', 'min_qty' => 1, 'max_qty' => 1, 'rate' => 130], 
+            ['hsn' => '0401', 'name' => 'GOKUL MILK', 'unit' => 'l', 'min_qty' => 1, 'max_qty' => 2, 'rate' => 66],
         ];
 
-        $expenses = [];
-        $startDate = Carbon::create(2026, 1, 1, 10, 0, 0); 
+        $dataToInsert = [];
 
-        // 3. 90 दिनों का लूप
+        // 👇 NAYA LOGIC: सिर्फ ठीक 90 बार लूप चलेगा (Exact 90 Rows) 👇
         for ($i = 0; $i < 90; $i++) {
-            $currentDate = $startDate->copy()->addDays($i);
+            
+            // पिछले 90 दिनों में से कोई भी एक रैंडम दिन चुनें
+            $randomDaysAgo = rand(0, 90);
+            $randomDate = Carbon::now()->subDays($randomDaysAgo);
+            
+            // रैंडम आइटम चुनें
             $randomItem = $items[array_rand($items)];
-
-            $qty = rand($randomItem['min_qty'] * 10, $randomItem['max_qty'] * 10) / 10;
-            $rate = $randomItem['rate'] + rand(-5, 5); 
+            
+            $qty = rand($randomItem['min_qty'] * 10, $randomItem['max_qty'] * 10) / 10; 
+            $rate = $randomItem['rate'];
             $value = round($qty * $rate, 2);
 
-            $expenses[] = [
+            $dataToInsert[] = [
                 'hsn' => $randomItem['hsn'],
                 'particulars' => $randomItem['name'],
                 'qty_kg' => $qty,
                 'unit' => $randomItem['unit'],
                 'n_rate' => $rate,
                 'value' => $value,
-                'created_at' => $currentDate->format('Y-m-d H:i:s'),
-                'updated_at' => $currentDate->format('Y-m-d H:i:s'),
+                'created_at' => $randomDate,
+                'updated_at' => $randomDate,
             ];
         }
 
-        // 4. आपके असली टेबल 'dmart_receipts' में डेटा सेव करें
-        DB::table('dmart_receipts')->insert($expenses);
-        
-        $this->command->info('✅ 90 Days of Real Life D-Mart Data Inserted Successfully in dmart_receipts table!');
+        // 4. डेटाबेस में सेव करें
+        foreach (array_chunk($dataToInsert, 50) as $chunk) {
+            DmartReceipt::insert($chunk);
+        }
+
+        $this->command->info('✅ Exactly 90 Records created successfully!');
     }
 }
