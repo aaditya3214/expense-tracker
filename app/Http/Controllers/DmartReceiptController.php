@@ -5,17 +5,24 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\DmartReceipt;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Auth; // 👈 PRO FIX: Auth को इंपोर्ट किया गया है
 
 class DmartReceiptController extends Controller
 {
+    // 1. SHOW HISTORY 
     public function index(Request $request)
     {
         $search = $request->input('search');
 
-        $items = DmartReceipt::latest()
+        // 👈 PRO FIX: query() जोड़ा गया ताकि VS Code लाल लाइन न दिखाए
+        $items = DmartReceipt::query()
+            ->where('user_id', Auth::id()) 
+            ->latest()
             ->when($search, function ($query, $search) {
-                $query->where('particulars', 'like', "%{$search}%")
+                $query->where(function($q) use ($search) {
+                    $q->where('particulars', 'like', "%{$search}%")
                       ->orWhere('hsn', 'like', "%{$search}%");
+                });
             })
             ->paginate(10)
             ->withQueryString();
@@ -26,14 +33,19 @@ class DmartReceiptController extends Controller
         ]);
     }
 
+    // 2. PRINT REPORT 
     public function printReport(Request $request)
     {
         $search = $request->input('search');
 
-        $items = DmartReceipt::latest()
+        $items = DmartReceipt::query()
+            ->where('user_id', Auth::id())
+            ->latest()
             ->when($search, function ($query, $search) {
-                $query->where('particulars', 'like', "%{$search}%")
+                $query->where(function($q) use ($search) {
+                    $q->where('particulars', 'like', "%{$search}%")
                       ->orWhere('hsn', 'like', "%{$search}%");
+                });
             })
             ->get();
 
@@ -43,14 +55,19 @@ class DmartReceiptController extends Controller
         ]);
     }
 
+    // 3. EXPORT EXCEL 
     public function exportExcel(Request $request)
     {
         $search = $request->input('search');
 
-        $items = DmartReceipt::latest()
+        $items = DmartReceipt::query()
+            ->where('user_id', Auth::id())
+            ->latest()
             ->when($search, function ($query, $search) {
-                $query->where('particulars', 'like', "%{$search}%")
+                $query->where(function($q) use ($search) {
+                    $q->where('particulars', 'like', "%{$search}%")
                       ->orWhere('hsn', 'like', "%{$search}%");
+                });
             })
             ->get(); 
 
@@ -59,13 +76,12 @@ class DmartReceiptController extends Controller
         return response()->streamDownload(function () use ($items) {
             $file = fopen('php://output', 'w');
             
-            // 👇 Excel की पहली लाइन में Date जोड़ा गया है 👇
             fputcsv($file, ['S.No.', 'Date', 'HSN', 'Particulars', 'Quantity', 'Unit', 'Rate (Rs)', 'Total Value (Rs)']);
             
             foreach ($items as $index => $item) {
                 fputcsv($file, [
                     $index + 1,
-                    $item->created_at->format('d M Y'), // तारीख यहाँ प्रिंट होगी (e.g. 29 Mar 2026)
+                    $item->created_at->format('d M Y'), 
                     $item->hsn,
                     $item->particulars,
                     $item->qty_kg,
@@ -78,41 +94,64 @@ class DmartReceiptController extends Controller
         }, $fileName);
     }
 
+    // 4. CREATE PAGE
     public function create()
     {
         return Inertia::render('CreateEntry');
     }
 
+    // 5. MANUAL SAVE 
     public function store(Request $request)
     {
-        $request->validate([
-            'hsn' => 'nullable|string', 'particulars' => 'required|string', 'qty_kg' => 'required|numeric',
-            'unit' => 'required|string', 'n_rate' => 'required|numeric', 'value' => 'required|numeric',
+        $validated = $request->validate([
+            'hsn' => 'nullable|string', 
+            'particulars' => 'required|string', 
+            'qty_kg' => 'required|numeric',
+            'unit' => 'required|string', 
+            'n_rate' => 'required|numeric', 
+            'value' => 'required|numeric',
         ]);
-        DmartReceipt::create($request->all());
+
+        $validated['user_id'] = Auth::id(); // 👈 PRO FIX
+
+        DmartReceipt::create($validated);
+        
         return redirect()->route('expenses.index');
     }
 
+    // 6. CSV BULK IMPORT 
     public function import(Request $request)
     {
         $request->validate(['csv_file' => 'required|mimes:csv,txt']);
         $file = $request->file('csv_file');
         $fileHandle = fopen($file->getPathname(), 'r');
-        fgetcsv($fileHandle);
+        fgetcsv($fileHandle); 
+        
         while (($row = fgetcsv($fileHandle)) !== false) {
             DmartReceipt::create([
-                'hsn' => $row[0], 'particulars' => $row[1], 'qty_kg' => $row[2], 
-                'unit' => 'kg', 'n_rate' => $row[3], 'value' => $row[4],
+                'user_id' => Auth::id(), // 👈 PRO FIX
+                'hsn' => $row[0], 
+                'particulars' => $row[1], 
+                'qty_kg' => $row[2], 
+                'unit' => 'kg', 
+                'n_rate' => $row[3], 
+                'value' => $row[4],
             ]);
         }
         fclose($fileHandle);
+        
         return redirect()->route('expenses.index');
     }
 
+    // 7. SECURE DELETE 
     public function destroy($id)
     {
-        $item = DmartReceipt::findOrFail($id);
+        $item = DmartReceipt::query()
+            ->where('user_id', Auth::id())
+            ->findOrFail($id);
+            
         $item->delete();
+        
         return redirect()->back();
     }
 }

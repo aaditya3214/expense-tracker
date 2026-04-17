@@ -11,11 +11,28 @@ export default function Dashboard({ monthlyData, itemData, costliestItem }) {
     const safeItemData = itemData.map(item => ({ ...item, value: Number(item.value) }));
     const safeCostliest = costliestItem || { name: 'N/A', price: 0 };
 
-    // Calculations
     const totalExpense = safeMonthlyData.reduce((sum, item) => sum + item.total, 0);
     const highestMonth = safeMonthlyData.length > 0 ? safeMonthlyData.reduce((max, item) => (item.total > max.total ? item : max), safeMonthlyData[0]) : { month: 'N/A', total: 0 };
     const topItem = safeItemData.length > 0 ? safeItemData[0] : { name: 'N/A', value: 0 };
 
+    // 🚀 NEW FEATURE: अगर डेटा नहीं है, तो डैशबोर्ड छिपा दें और Welcome Screen दिखाएं
+    if (safeMonthlyData.length === 0) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
+                <Head title="Welcome to Dashboard" />
+                <div className="bg-white p-10 rounded-2xl shadow-xl border border-gray-200 text-center max-w-lg">
+                    <div className="text-6xl mb-6">👋</div>
+                    <h2 className="text-3xl font-black text-blue-700 mb-2">Welcome!</h2>
+                    <p className="text-gray-600 mb-8 font-medium">Your dashboard is currently empty because you haven't added any expenses yet. Let's start tracking your purchases!</p>
+                    <Link href="/expenses/create" className="bg-blue-600 text-white font-black text-lg py-3 px-8 rounded-xl shadow-md hover:bg-blue-700 hover:-translate-y-1 hover:shadow-xl transition-all duration-300 inline-block">
+                        + Add Your First Expense
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
+    // अगर डेटा है, तो पुराना वाला शानदार डैशबोर्ड दिखाएं
     return (
         <div className="min-h-screen bg-gray-50 p-6 md:p-10">
             <Head title="Dashboard" />
@@ -38,7 +55,7 @@ export default function Dashboard({ monthlyData, itemData, costliestItem }) {
                     </div>
                 </div>
 
-                {/* --- 🚀 4 KPI CARDS GRID --- */}
+                {/* --- 4 KPI CARDS GRID --- */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     
                     <div className="group bg-white rounded-2xl shadow-sm border border-gray-200 p-5 flex items-center border-b-4 border-b-blue-600 hover:-translate-y-1 hover:shadow-xl transition-all duration-300 cursor-default">
@@ -86,10 +103,9 @@ export default function Dashboard({ monthlyData, itemData, costliestItem }) {
 
                 </div>
 
-                {/* --- 🚀 CHARTS SECTION (HOVER ADDED HERE) --- */}
+                {/* --- CHARTS SECTION --- */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     
-                    {/* A. Bar Chart Card */}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
                         <h3 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">📊 Monthly Expenditure</h3>
                         <div className="h-[400px]">
@@ -105,7 +121,6 @@ export default function Dashboard({ monthlyData, itemData, costliestItem }) {
                         </div>
                     </div>
 
-                    {/* B. Pie Chart Card */}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
                         <h3 className="text-xl font-bold text-gray-800 mb-6 border-b pb-2">🏆 Top 5 Expenses</h3>
                         <div className="h-[400px] flex justify-center items-center">

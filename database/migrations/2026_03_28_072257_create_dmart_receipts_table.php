@@ -13,9 +13,17 @@ return new class extends Migration
     {
         Schema::create('dmart_receipts', function (Blueprint $table) {
             $table->id();
-            $table->String('hsn')->nullable();
+            
+            // 👇 PRO FIX 1: User ID कॉलम (Data Isolation के लिए)
+            $table->unsignedBigInteger('user_id')->default(1); 
+            
+            $table->string('hsn')->nullable();
             $table->string('particulars'); // सामान का नाम (जैसे: SUGAR, SOAP)
             $table->decimal('qty_kg', 8, 3); // मात्रा (किलो/ग्राम के लिए 3 डेसिमल, जैसे 1.500)
+            
+            // 👇 PRO FIX 2: Unit कॉलम (ताकि Seeder में एरर न आए)
+            $table->string('unit')->default('kg'); 
+            
             $table->decimal('n_rate', 10, 2); // एक यूनिट की कीमत (रुपये और पैसे के लिए)
             $table->decimal('value', 10, 2); // Price (in rupees and paise)
             $table->timestamps();
