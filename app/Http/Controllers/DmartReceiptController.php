@@ -2,26 +2,30 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\DmartReceipt;
+use App\Models\Vendor;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
-use Illuminate\Support\Facades\Auth; // 👈 PRO FIX: Auth को इंपोर्ट किया गया है
+
+// Authentication facade imported for secure access control
 
 class DmartReceiptController extends Controller
 {
-    // 1. SHOW HISTORY 
+    // 1. SHOW HISTORY
     public function index(Request $request)
     {
         $search = $request->input('search');
 
-        // 👈 PRO FIX: query() जोड़ा गया ताकि VS Code लाल लाइन न दिखाए
+        // Using query() builder for better IDE support and static analysis
         $items = DmartReceipt::query()
-            ->where('user_id', Auth::id()) 
+            ->where('user_id', Auth::id())
             ->latest()
             ->when($search, function ($query, $search) {
-                $query->where(function($q) use ($search) {
+                $query->where(function ($q) use ($search) {
                     $q->where('particulars', 'like', "%{$search}%")
-                      ->orWhere('hsn', 'like', "%{$search}%");
+                        ->orWhere('hsn', 'like', "%{$search}%")
+                        ->orWhere('vendor', 'like', "%{$search}%");
                 });
             })
             ->paginate(10)
@@ -29,11 +33,11 @@ class DmartReceiptController extends Controller
 
         return Inertia::render('History', [
             'items' => $items,
-            'filters' => $request->only(['search'])
+            'filters' => $request->only(['search']),
         ]);
     }
 
-    // 2. PRINT REPORT 
+    // 2. PRINT REPORT
     public function printReport(Request $request)
     {
         $search = $request->input('search');
@@ -42,20 +46,21 @@ class DmartReceiptController extends Controller
             ->where('user_id', Auth::id())
             ->latest()
             ->when($search, function ($query, $search) {
-                $query->where(function($q) use ($search) {
+                $query->where(function ($q) use ($search) {
                     $q->where('particulars', 'like', "%{$search}%")
-                      ->orWhere('hsn', 'like', "%{$search}%");
+                        ->orWhere('hsn', 'like', "%{$search}%")
+                        ->orWhere('vendor', 'like', "%{$search}%");
                 });
             })
             ->get();
 
         return Inertia::render('PrintReport', [
             'items' => $items,
-            'searchQuery' => $search
+            'searchQuery' => $search,
         ]);
     }
 
-    // 3. EXPORT EXCEL 
+    // 3. EXPORT EXCEL
     public function exportExcel(Request $request)
     {
         $search = $request->input('search');
@@ -64,30 +69,31 @@ class DmartReceiptController extends Controller
             ->where('user_id', Auth::id())
             ->latest()
             ->when($search, function ($query, $search) {
-                $query->where(function($q) use ($search) {
+                $query->where(function ($q) use ($search) {
                     $q->where('particulars', 'like', "%{$search}%")
-                      ->orWhere('hsn', 'like', "%{$search}%");
+                        ->orWhere('hsn', 'like', "%{$search}%")
+                        ->orWhere('vendor', 'like', "%{$search}%");
                 });
             })
-            ->get(); 
+            ->get();
 
-        $fileName = 'Expense_Report_' . date('Y-m-d') . '.csv';
+        $fileName = 'Expense_Report_'.date('Y-m-d').'.csv';
 
         return response()->streamDownload(function () use ($items) {
             $file = fopen('php://output', 'w');
-            
+
             fputcsv($file, ['S.No.', 'Date', 'HSN', 'Particulars', 'Quantity', 'Unit', 'Rate (Rs)', 'Total Value (Rs)']);
-            
+
             foreach ($items as $index => $item) {
                 fputcsv($file, [
                     $index + 1,
-                    $item->created_at->format('d M Y'), 
+                    $item->created_at->format('d M Y'),
                     $item->hsn,
                     $item->particulars,
                     $item->qty_kg,
                     $item->unit,
                     $item->n_rate,
-                    $item->value
+                    $item->value,
                 ]);
             }
             fclose($file);
@@ -97,61 +103,80 @@ class DmartReceiptController extends Controller
     // 4. CREATE PAGE
     public function create()
     {
-        return Inertia::render('CreateEntry');
+        $vendors = Vendor::where('user_id', Auth::id())
+            ->orderBy('name')
+            ->get();
+
+        return Inertia::render('CreateEntry', [
+            'vendors' => $vendors,
+        ]);
     }
 
-    // 5. MANUAL SAVE 
+    // 5. MANUAL SAVE
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'hsn' => 'nullable|string', 
-            'particulars' => 'required|string', 
+            'hsn' => 'nullable|string',
+            'particulars' => 'required|string',
             'qty_kg' => 'required|numeric',
-            'unit' => 'required|string', 
-            'n_rate' => 'required|numeric', 
+            'unit' => 'required|string',
+            'n_rate' => 'required|numeric',
             'value' => 'required|numeric',
+            'vendor' => 'required|string',
         ]);
 
-        $validated['user_id'] = Auth::id(); // 👈 PRO FIX
+        $validated['user_id'] = Auth::id(); // Assign authenticated user's ID
 
         DmartReceipt::create($validated);
-        
+
         return redirect()->route('expenses.index');
     }
 
-    // 6. CSV BULK IMPORT 
+    // 6. CSV BULK IMPORT
     public function import(Request $request)
     {
         $request->validate(['csv_file' => 'required|mimes:csv,txt']);
         $file = $request->file('csv_file');
         $fileHandle = fopen($file->getPathname(), 'r');
-        fgetcsv($fileHandle); 
-        
+        fgetcsv($fileHandle); // Skip header
+
+        // Ensure "DMart" vendor exists for this user
+        Vendor::firstOrCreate(
+            ['user_id' => Auth::id(), 'name' => 'DMart'],
+            ['contact_number' => 'N/A', 'gstin' => 'N/A', 'address' => 'N/A']
+        );
+
         while (($row = fgetcsv($fileHandle)) !== false) {
+            if (empty($row[0])) {
+                continue;
+            }
+
             DmartReceipt::create([
-                'user_id' => Auth::id(), // 👈 PRO FIX
-                'hsn' => $row[0], 
-                'particulars' => $row[1], 
-                'qty_kg' => $row[2], 
-                'unit' => 'kg', 
-                'n_rate' => $row[3], 
-                'value' => $row[4],
+                'user_id' => Auth::id(),
+                'hsn' => $row[1] ?? '-',
+                'particulars' => $row[2] ?? 'Unknown',
+                'qty_kg' => (float) ($row[3] ?? 0),
+                'unit' => $row[4] ?? 'PCS',
+                'n_rate' => (float) ($row[5] ?? 0),
+                'value' => (float) ($row[6] ?? 0),
+                'vendor' => 'DMart',
+                'created_at' => date('Y-m-d H:i:s', strtotime($row[0])),
             ]);
         }
         fclose($fileHandle);
-        
+
         return redirect()->route('expenses.index');
     }
 
-    // 7. SECURE DELETE 
+    // 7. SECURE DELETE
     public function destroy($id)
     {
         $item = DmartReceipt::query()
             ->where('user_id', Auth::id())
             ->findOrFail($id);
-            
+
         $item->delete();
-        
+
         return redirect()->back();
     }
 }

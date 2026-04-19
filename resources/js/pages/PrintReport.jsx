@@ -24,7 +24,7 @@ export default function PrintReport({ items, searchQuery }) {
                 <thead className="bg-gray-200 text-gray-900 border-b-2 border-gray-800">
                     <tr>
                         <th className="p-3 border border-gray-300">S.No.</th>
-                        <th className="p-3 border border-gray-300">Date</th> {/* 👇 नया Date Header 👇 */}
+                        <th className="p-3 border border-gray-300">Date</th> {/* Added Date Header */}
                         <th className="p-3 border border-gray-300">HSN</th>
                         <th className="p-3 border border-gray-300">Particulars</th>
                         <th className="p-3 text-right border border-gray-300">Quantity</th>
@@ -38,7 +38,7 @@ export default function PrintReport({ items, searchQuery }) {
                         <tr key={item.id} className="border-b border-gray-300">
                             <td className="p-3 border border-gray-300 font-bold text-gray-700">{index + 1}</td>
                             
-                            {/* 👇 यहाँ Date को सुंदर फॉर्मेट में दिखाया जा रहा है 👇 */}
+                            {/* Format date for professional display */}
                             <td className="p-3 border border-gray-300 text-gray-800 whitespace-nowrap">
                                 {new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                             </td>
@@ -56,7 +56,7 @@ export default function PrintReport({ items, searchQuery }) {
 
             {items.length === 0 && (
                 <div className="text-center p-10">
-                    <p className="text-gray-500 text-lg font-medium">कोई डेटा नहीं मिला।</p>
+                    <p className="text-gray-500 text-lg font-medium">No records found.</p>
                 </div>
             )}
         </div>

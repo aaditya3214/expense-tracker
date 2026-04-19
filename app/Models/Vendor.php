@@ -2,21 +2,20 @@
 
 namespace App\Models;
 
+use Database\Factories\VendorFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class DmartReceipt extends Model
+class Vendor extends Model
 {
+    /** @use HasFactory<VendorFactory> */
     use HasFactory;
 
     protected $fillable = [
         'user_id',
-        'hsn',
-        'particulars',
-        'qty_kg',
-        'unit',
-        'n_rate',
-        'value',
-        'vendor',
+        'name',
+        'gstin',
+        'contact_number',
+        'address',
     ];
 }
