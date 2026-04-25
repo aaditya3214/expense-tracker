@@ -20,7 +20,7 @@ class DmartReceiptController extends Controller
         // Using query() builder for better IDE support and static analysis
         $items = DmartReceipt::query()
             ->where('user_id', Auth::id())
-            ->latest()
+            ->orderBy('purchased_at', 'desc')
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('particulars', 'like', "%{$search}%")
@@ -44,7 +44,7 @@ class DmartReceiptController extends Controller
 
         $items = DmartReceipt::query()
             ->where('user_id', Auth::id())
-            ->latest()
+            ->orderBy('purchased_at', 'desc')
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('particulars', 'like', "%{$search}%")
@@ -67,7 +67,7 @@ class DmartReceiptController extends Controller
 
         $items = DmartReceipt::query()
             ->where('user_id', Auth::id())
-            ->latest()
+            ->orderBy('purchased_at', 'desc')
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('particulars', 'like', "%{$search}%")
@@ -87,7 +87,7 @@ class DmartReceiptController extends Controller
             foreach ($items as $index => $item) {
                 fputcsv($file, [
                     $index + 1,
-                    $item->created_at->format('d M Y'),
+                    $item->purchased_at ? date('d M Y', strtotime($item->purchased_at)) : $item->created_at->format('d M Y'),
                     $item->hsn,
                     $item->particulars,
                     $item->qty_kg,
@@ -116,6 +116,7 @@ class DmartReceiptController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'purchased_at' => 'nullable|date',
             'hsn' => 'nullable|string',
             'particulars' => 'required|string',
             'qty_kg' => 'required|numeric',
@@ -125,7 +126,8 @@ class DmartReceiptController extends Controller
             'vendor' => 'required|string',
         ]);
 
-        $validated['user_id'] = Auth::id(); // Assign authenticated user's ID
+        $validated['user_id'] = Auth::id(); 
+        $validated['purchased_at'] = $validated['purchased_at'] ?? now()->format('Y-m-d');
 
         DmartReceipt::create($validated);
 
@@ -151,16 +153,25 @@ class DmartReceiptController extends Controller
                 continue;
             }
 
+            $particulars = $row[2] ?? 'Unknown';
+            $vendorName = (str_contains(strtoupper($particulars), 'STAR')) ? 'Star Bazaar' : 'DMart';
+
+            // Ensure the detected vendor exists
+            Vendor::firstOrCreate(
+                ['user_id' => Auth::id(), 'name' => $vendorName],
+                ['contact_number' => 'N/A', 'gstin' => 'N/A', 'address' => 'N/A']
+            );
+
             DmartReceipt::create([
                 'user_id' => Auth::id(),
+                'purchased_at' => date('Y-m-d', strtotime($row[0])),
                 'hsn' => $row[1] ?? '-',
-                'particulars' => $row[2] ?? 'Unknown',
+                'particulars' => $particulars,
                 'qty_kg' => (float) ($row[3] ?? 0),
                 'unit' => $row[4] ?? 'PCS',
                 'n_rate' => (float) ($row[5] ?? 0),
                 'value' => (float) ($row[6] ?? 0),
-                'vendor' => 'DMart',
-                'created_at' => date('Y-m-d H:i:s', strtotime($row[0])),
+                'vendor' => $vendorName,
             ]);
         }
         fclose($fileHandle);

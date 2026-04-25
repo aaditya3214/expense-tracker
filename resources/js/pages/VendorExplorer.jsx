@@ -10,6 +10,15 @@ export default function VendorExplorer({ vendors }) {
         vendor.name.toLowerCase().includes(vendorSearch.toLowerCase())
     );
 
+    // Smart Auto-Selection logic
+    React.useEffect(() => {
+        if (filteredVendors.length === 1) {
+            setSelectedVendorId(filteredVendors[0].id.toString());
+        } else if (selectedVendorId && !filteredVendors.find(v => v.id.toString() === selectedVendorId)) {
+            setSelectedVendorId('');
+        }
+    }, [vendorSearch, filteredVendors.length]);
+
     const handleViewProducts = () => {
         if (!selectedVendorId) {
             alert("Please select a vendor first!");
@@ -65,18 +74,18 @@ export default function VendorExplorer({ vendors }) {
                                         <select 
                                             value={selectedVendorId} 
                                             onChange={(e) => setSelectedVendorId(e.target.value)}
-                                            className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 flex pl-5 pr-10 text-gray-800 font-bold focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all appearance-none cursor-pointer outline-none"
+                                            className="no-default-arrow w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 flex pl-5 pr-12 text-gray-800 font-bold focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all appearance-none cursor-pointer outline-none !appearance-none"
                                         >
-                                            <option value="">-- {filteredVendors.length} vendors found --</option>
+                                            <option value="">{filteredVendors.length === 0 ? 'No vendors found' : `-- Choose from ${filteredVendors.length} vendors --`}</option>
                                             {filteredVendors.map(vendor => (
                                                 <option key={vendor.id} value={vendor.id}>
                                                     🏢 {vendor.name}
                                                 </option>
                                             ))}
                                         </select>
-                                        <div className="absolute inset-y-0 right-5 flex items-center pointer-events-none text-gray-400 group-hover/select:text-blue-500 transition-colors">
-                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                                        <div className="absolute inset-y-0 right-5 flex items-center pointer-events-none text-blue-500 group-focus-within/select:text-blue-600">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" />
                                             </svg>
                                         </div>
                                     </div>
@@ -118,6 +127,16 @@ export default function VendorExplorer({ vendors }) {
                 }
                 .animate-bounce-subtle {
                     animation: bounce-subtle 3s ease-in-out infinite;
+                }
+                /* Hide default browser arrow for Chrome, Safari, and Firefox */
+                .no-default-arrow {
+                    -webkit-appearance: none !important;
+                    -moz-appearance: none !important;
+                    appearance: none !important;
+                    background-image: none !important;
+                }
+                .no-default-arrow::-ms-expand {
+                    display: none !important;
                 }
             `}</style>
         </AuthenticatedLayout>

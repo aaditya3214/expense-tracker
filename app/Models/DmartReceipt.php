@@ -11,6 +11,7 @@ class DmartReceipt extends Model
 
     protected $fillable = [
         'user_id',
+        'purchased_at',
         'hsn',
         'particulars',
         'qty_kg',

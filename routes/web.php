@@ -16,25 +16,30 @@ Route::get('/home', function () {
 })->name('home');
 
 // --- DASHBOARD ROUTE ---
-Route::get('/', function () {
+Route::get('/', function (Illuminate\Http\Request $request) {
+    $userId = Auth::id();
+    $selectedMonth = $request->query('month'); // e.g., 'April', 'March'
 
-    // 🔒 PRO SECURITY FIX: सिर्फ उसी यूज़र का डेटा लाओ जो लॉगिन है
-    $userId = Auth::id(); // 👈 PRO FIX: auth()->id() की जगह Auth::id()
-
-    // 1. Monthly Data
-    $monthlyData = DmartReceipt::query() // 👈 PRO FIX: query() जोड़ा गया
+    // 1. Monthly Data (Always show overall trend, but highlight current)
+    $monthlyData = DmartReceipt::query()
         ->where('user_id', $userId)
         ->select(
-            DB::raw('MONTHNAME(created_at) as month'),
+            DB::raw('MONTHNAME(purchased_at) as month'),
+            DB::raw('MONTH(purchased_at) as month_num'),
             DB::raw('SUM(value) as total')
         )
-        ->groupBy('month')
-        ->orderByRaw('MIN(created_at)')
+        ->groupBy('month', 'month_num')
+        ->orderBy('month_num')
         ->get();
 
-    // 2. Top 5 Items (Total Spend)
-    $itemData = DmartReceipt::query()
-        ->where('user_id', $userId)
+    // 2. Filtered KPI Query
+    $baseQuery = DmartReceipt::query()->where('user_id', $userId);
+    if ($selectedMonth && $selectedMonth !== 'Overall') {
+        $baseQuery->whereRaw('MONTHNAME(purchased_at) = ?', [$selectedMonth]);
+    }
+
+    // 2. Top 5 Items (Filtered)
+    $itemData = (clone $baseQuery)
         ->select(
             'particulars as name',
             DB::raw('SUM(value) as value')
@@ -44,9 +49,8 @@ Route::get('/', function () {
         ->take(5)
         ->get();
 
-    // 🆕 3. Top 5 Vendors (Product Count)
-    $vendorData = DmartReceipt::query()
-        ->where('user_id', $userId)
+    // 3. Top 5 Vendors (Filtered)
+    $vendorData = (clone $baseQuery)
         ->select(
             'vendor as name',
             DB::raw('COUNT(*) as value'),
@@ -57,21 +61,42 @@ Route::get('/', function () {
         ->take(5)
         ->get();
 
-    // 4. Costliest Single Item (Per Unit Rate)
-    $costliestItem = DmartReceipt::query()
-        ->where('user_id', $userId)
+    // 4. Costliest Single Item (Filtered)
+    $costliestItem = (clone $baseQuery)
         ->select('particulars as name', 'n_rate as price')
         ->orderBy('n_rate', 'desc')
         ->first();
+
+    // 5. Overall Months with Data (for the filter bar list)
+    $allMonthsWithData = DmartReceipt::query()
+        ->where('user_id', $userId)
+        ->select(DB::raw('DISTINCT MONTHNAME(purchased_at) as month'))
+        ->pluck('month')
+        ->toArray();
+
+    // 6. Total Records Count (to check if database is empty)
+    $totalRecords = DmartReceipt::where('user_id', $userId)->count();
 
     return Inertia::render('Dashboard', [
         'monthlyData' => $monthlyData,
         'itemData' => $itemData,
         'vendorData' => $vendorData,
         'costliestItem' => $costliestItem,
+        'totalRecords' => $totalRecords,
+        'filters' => [
+            'month' => $selectedMonth ?: 'Overall'
+        ],
+        'availableMonths' => $allMonthsWithData
     ]);
 
 })->middleware(['auth', 'verified'])->name('dashboard');
+
+// --- CLEAR ALL RECORDS ---
+Route::post('/expenses/clear-all', function () {
+    DmartReceipt::where('user_id', Auth::id())->delete();
+    // Also clear vendors that were auto-created? Maybe just keep them.
+    return redirect()->route('dashboard');
+})->middleware(['auth'])->name('expenses.clear-all');
 
 // 🔒 SECURITY GUARD & EXPENSES ROUTES
 Route::middleware('auth')->group(function () {

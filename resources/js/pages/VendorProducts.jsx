@@ -122,6 +122,7 @@ export default function VendorProducts({ vendor, products, filters }) {
                             <table className="w-full text-left border-collapse">
                                 <thead className="bg-gray-50">
                                     <tr>
+                                        <th className="p-5 text-[11px] font-black text-gray-500 uppercase tracking-wider">S.No.</th>
                                         <th className="p-5 text-[11px] font-black text-gray-500 uppercase tracking-wider">Date</th>
                                         <th className="p-5 text-[11px] font-black text-gray-500 uppercase tracking-wider">Particulars</th>
                                         <th className="p-5 text-[11px] font-black text-gray-500 uppercase tracking-wider text-right">Qty</th>
@@ -133,10 +134,13 @@ export default function VendorProducts({ vendor, products, filters }) {
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {products.data.length > 0 ? (
-                                        products.data.map((item) => (
+                                        products.data.map((item, index) => (
                                             <tr key={item.id} className="hover:bg-blue-50 transition-colors duration-200">
+                                                <td className="p-5 text-sm text-gray-500 font-bold">
+                                                    {(products.current_page - 1) * products.per_page + index + 1}
+                                                </td>
                                                 <td className="p-5 text-sm text-gray-600 font-medium">
-                                                    {new Date(item.created_at).toLocaleDateString()}
+                                                    {new Date(item.purchased_at || item.created_at).toLocaleDateString()}
                                                 </td>
                                                 <td className="p-5">
                                                     <div className="font-bold text-gray-900">

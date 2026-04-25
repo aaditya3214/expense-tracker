@@ -5,6 +5,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 export default function CreateEntry({ vendors = [] }) {
     
     const { data, setData, post, processing } = useForm({
+        purchased_at: new Date().toISOString().split('T')[0],
         hsn: '', particulars: '', qty_kg: '', unit: 'kg', n_rate: '', value: '', vendor: ''
     });
 
@@ -64,6 +65,17 @@ export default function CreateEntry({ vendors = [] }) {
 
                 <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300">
                     <h3 className="col-span-1 md:col-span-2 text-lg font-bold mb-2 text-blue-600">Manual Entry</h3>
+                    
+                    <div className="flex flex-col col-span-1 md:col-span-2">
+                        <label className="text-xs font-bold text-gray-500 mb-1 ml-1 uppercase tracking-wider">Purchase Date</label>
+                        <input 
+                            type="date" 
+                            value={data.purchased_at} 
+                            onChange={e => setData('purchased_at', e.target.value)} 
+                            required 
+                            className="border p-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all w-full md:w-1/2" 
+                        />
+                    </div>
                     
                     <input type="text" placeholder="HSN (Optional)" value={data.hsn} onChange={e => setData('hsn', e.target.value)} className="border p-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" />
                     <input type="text" placeholder="Particulars (Item Name)" value={data.particulars} onChange={e => setData('particulars', e.target.value)} required className="border p-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all" />

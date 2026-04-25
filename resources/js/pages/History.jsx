@@ -69,7 +69,7 @@ export default function History({ items, filters }) {
                             {items.data.map((item, index) => (
                                 <tr key={item.id} className="border-b hover:bg-blue-50 transition-colors duration-200">
                                     <td className="p-4 text-gray-500 font-bold">{(items.current_page - 1) * items.per_page + index + 1}</td>
-                                    <td className="p-4 text-gray-700 font-medium whitespace-nowrap">{new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                                    <td className="p-4 text-gray-700 font-medium whitespace-nowrap">{new Date(item.purchased_at || item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                                     <td className="p-4 text-gray-600 font-mono text-xs">
                                         {item.hsn ? (
                                             <span className="bg-gray-100 text-gray-500 px-2 py-1 rounded border border-gray-200">{item.hsn}</span>
