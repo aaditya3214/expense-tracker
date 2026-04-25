@@ -46,13 +46,13 @@ export default function Vendors({ vendors }) {
                         <div className="flex gap-4">
                             <Link 
                                 href={route('dashboard')}
-                                className="bg-gray-800 text-white font-bold py-2.5 px-6 rounded-xl hover:bg-gray-900 transition-all shadow-lg active:scale-95 flex items-center gap-2"
+                                className="bg-gray-800 text-white font-bold py-2.5 px-6 rounded-xl hover:bg-gray-900 hover:-translate-y-1 hover:shadow-xl transition-all shadow-lg active:scale-95 flex items-center gap-2"
                             >
                                 🏠 Dashboard
                             </Link>
                             <button 
                                 onClick={() => setIsFormOpen(!isFormOpen)}
-                                className="bg-blue-600 text-white font-bold py-2.5 px-6 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/30 active:scale-95"
+                                className="bg-blue-600 text-white font-bold py-2.5 px-6 rounded-xl hover:bg-blue-700 hover:-translate-y-1 hover:shadow-xl transition-all shadow-lg shadow-blue-500/30 active:scale-95"
                             >
                                 {isFormOpen ? '✕ Close Form' : '+ Register New Vendor'}
                             </button>

@@ -46,7 +46,7 @@ const Top5ExpensesChart = ({ data, colors }) => {
     );
 };
 
-export default function Dashboard({ monthlyData, itemData, vendorData, costliestItem, filters, availableMonths, totalRecords }) {
+export default function Dashboard({ monthlyData, itemData, vendorData, costliestItem, filters, availableMonths, availableYears, totalRecords }) {
     
     const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']; // blue-500, green-500, amber-500, red-500, purple-500
     const DARK_COLORS = ['#2563EB', '#059669', '#D97706', '#DC2626', '#7C3AED']; // blue-600, green-600, amber-600, red-600, purple-600
@@ -85,27 +85,52 @@ export default function Dashboard({ monthlyData, itemData, vendorData, costliest
     );
 
     const FilterBar = () => (
-        <div className="mb-8 flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
-            <span className="text-sm font-black text-gray-500 uppercase tracking-widest ml-2">Filter By Month:</span>
-            <div className="flex flex-wrap gap-2">
-                {['Overall', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month) => {
-                    const isActive = filters.month === month;
-                    const dataExists = month === 'Overall' || availableMonths.includes(month);
-                    
-                    return (
-                        <button
-                            key={month}
-                            onClick={() => handleFilterChange(month)}
-                            className={`px-4 py-2 rounded-xl font-bold text-xs transition-all duration-300 ${
-                                isActive 
-                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-300' 
-                                : 'bg-white text-gray-600 hover:bg-blue-50 hover:text-blue-600 border border-gray-100 shadow-sm'
-                            }`}
-                        >
-                            {month === 'Overall' ? 'Overall' : month.substring(0, 3)}
-                        </button>
-                    );
-                })}
+        <div className="space-y-4 mb-8">
+            {/* Year Filter */}
+            <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Select Year:</span>
+                <div className="flex flex-wrap gap-2">
+                    {['Overall', ...availableYears].map((year) => {
+                        const isActive = filters.year.toString() === year.toString();
+                        return (
+                            <button
+                                key={year}
+                                onClick={() => handleYearChange(year)}
+                                className={`px-5 py-2 rounded-xl font-bold text-xs transition-all duration-300 ${
+                                    isActive 
+                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30 ring-2 ring-indigo-300' 
+                                    : 'bg-white text-gray-600 hover:bg-indigo-50 hover:text-indigo-600 border border-gray-100 shadow-sm'
+                                }`}
+                            >
+                                {year}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Month Filter */}
+            <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Select Month:</span>
+                <div className="flex flex-wrap gap-2">
+                    {['Overall', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month) => {
+                        const isActive = filters.month === month;
+                        
+                        return (
+                            <button
+                                key={month}
+                                onClick={() => handleFilterChange(month)}
+                                className={`px-4 py-2 rounded-xl font-bold text-xs transition-all duration-300 ${
+                                    isActive 
+                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-300' 
+                                    : 'bg-white text-gray-600 hover:bg-blue-50 hover:text-blue-600 border border-gray-100 shadow-sm'
+                                }`}
+                            >
+                                {month === 'Overall' ? 'Overall' : month.substring(0, 3)}
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );
@@ -132,7 +157,11 @@ export default function Dashboard({ monthlyData, itemData, vendorData, costliest
     }
 
     const handleFilterChange = (month) => {
-        router.get('/', { month }, { preserveState: true, preserveScroll: true });
+        router.get('/', { ...filters, month }, { preserveState: true, preserveScroll: true });
+    };
+
+    const handleYearChange = (year) => {
+        router.get('/', { year, month: 'Overall' }, { preserveState: true, preserveScroll: true });
     };
 
     const handleClearAll = () => {
@@ -188,7 +217,7 @@ export default function Dashboard({ monthlyData, itemData, vendorData, costliest
             <div className="flex flex-col md:flex-row justify-between items-center mb-8 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
                 <div className="mb-4 md:mb-0 text-center md:text-left">
                     <h2 className="text-3xl font-black text-blue-700 tracking-tight">Expenses Dashboard</h2>
-                    <p className="text-gray-500 font-medium mt-1">{filters.month} Summary Analytics</p>
+                    <p className="text-gray-500 font-medium mt-1">{filters.month} {filters.year === 'Overall' ? '' : filters.year} Expenses Summary</p>
                 </div>
                 <div className="flex flex-wrap justify-center md:justify-end gap-3 w-full md:w-auto">
                     <button 

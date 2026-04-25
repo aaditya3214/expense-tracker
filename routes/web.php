@@ -18,10 +18,39 @@ Route::get('/home', function () {
 // --- DASHBOARD ROUTE ---
 Route::get('/', function (Illuminate\Http\Request $request) {
     $userId = Auth::id();
-    $selectedMonth = $request->query('month'); // e.g., 'April', 'March'
+    $selectedMonth = $request->query('month', 'Overall');
+    $selectedYear = $request->query('year', 'Overall');
 
-    // 1. Monthly Data (Always show overall trend, but highlight current)
-    $monthlyData = DmartReceipt::query()
+    // 1. Available Years & Months for Filters
+    $availableYears = DmartReceipt::query()
+        ->where('user_id', $userId)
+        ->select(DB::raw('DISTINCT YEAR(purchased_at) as year'))
+        ->orderBy('year', 'desc')
+        ->pluck('year')
+        ->toArray();
+
+    $availableMonths = DmartReceipt::query()
+        ->where('user_id', $userId)
+        ->when($selectedYear !== 'Overall', function($q) use ($selectedYear) {
+            $q->whereYear('purchased_at', $selectedYear);
+        })
+        ->select(DB::raw('DISTINCT MONTHNAME(purchased_at) as month'))
+        ->pluck('month')
+        ->toArray();
+
+    // 2. Base Analytics Query
+    $baseQuery = DmartReceipt::query()->where('user_id', $userId);
+    
+    if ($selectedYear !== 'Overall') {
+        $baseQuery->whereYear('purchased_at', $selectedYear);
+    }
+    
+    if ($selectedMonth !== 'Overall') {
+        $baseQuery->whereRaw('MONTHNAME(purchased_at) = ?', [$selectedMonth]);
+    }
+
+    // 3. Monthly Trend Data
+    $trendQuery = DmartReceipt::query()
         ->where('user_id', $userId)
         ->select(
             DB::raw('MONTHNAME(purchased_at) as month'),
@@ -29,52 +58,36 @@ Route::get('/', function (Illuminate\Http\Request $request) {
             DB::raw('SUM(value) as total')
         )
         ->groupBy('month', 'month_num')
-        ->orderBy('month_num')
-        ->get();
+        ->orderBy('month_num');
 
-    // 2. Filtered KPI Query
-    $baseQuery = DmartReceipt::query()->where('user_id', $userId);
-    if ($selectedMonth && $selectedMonth !== 'Overall') {
-        $baseQuery->whereRaw('MONTHNAME(purchased_at) = ?', [$selectedMonth]);
+    if ($selectedYear !== 'Overall') {
+        $trendQuery->whereYear('purchased_at', $selectedYear);
     }
 
-    // 2. Top 5 Items (Filtered)
+    $monthlyData = $trendQuery->get();
+
+    // 4. Top 5 Items
     $itemData = (clone $baseQuery)
-        ->select(
-            'particulars as name',
-            DB::raw('SUM(value) as value')
-        )
+        ->select('particulars as name', DB::raw('SUM(value) as value'))
         ->groupBy('particulars')
         ->orderBy('value', 'desc')
         ->take(5)
         ->get();
 
-    // 3. Top 5 Vendors (Filtered)
+    // 5. Top 5 Vendors
     $vendorData = (clone $baseQuery)
-        ->select(
-            'vendor as name',
-            DB::raw('COUNT(*) as value'),
-            DB::raw('SUM(value) as total_spend')
-        )
+        ->select('vendor as name', DB::raw('COUNT(*) as value'), DB::raw('SUM(value) as total_spend'))
         ->groupBy('vendor')
         ->orderBy('value', 'desc')
         ->take(5)
         ->get();
 
-    // 4. Costliest Single Item (Filtered)
+    // 6. Costliest Single Item
     $costliestItem = (clone $baseQuery)
         ->select('particulars as name', 'n_rate as price')
         ->orderBy('n_rate', 'desc')
         ->first();
 
-    // 5. Overall Months with Data (for the filter bar list)
-    $allMonthsWithData = DmartReceipt::query()
-        ->where('user_id', $userId)
-        ->select(DB::raw('DISTINCT MONTHNAME(purchased_at) as month'))
-        ->pluck('month')
-        ->toArray();
-
-    // 6. Total Records Count (to check if database is empty)
     $totalRecords = DmartReceipt::where('user_id', $userId)->count();
 
     return Inertia::render('Dashboard', [
@@ -84,9 +97,11 @@ Route::get('/', function (Illuminate\Http\Request $request) {
         'costliestItem' => $costliestItem,
         'totalRecords' => $totalRecords,
         'filters' => [
-            'month' => $selectedMonth ?: 'Overall'
+            'month' => $selectedMonth,
+            'year' => $selectedYear
         ],
-        'availableMonths' => $allMonthsWithData
+        'availableMonths' => $availableMonths,
+        'availableYears' => $availableYears
     ]);
 
 })->middleware(['auth', 'verified'])->name('dashboard');

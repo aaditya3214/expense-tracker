@@ -47,22 +47,47 @@ class VendorController extends Controller
 
     public function showProducts(Request $request, $id)
     {
-        $vendor = Vendor::where('user_id', Auth::id())->findOrFail($id);
+        $userId = Auth::id();
+        $vendor = Vendor::where('user_id', $userId)->findOrFail($id);
+        
         $search = $request->input('search');
+        $selectedMonth = $request->query('month', 'Overall');
+        $selectedYear = $request->query('year', 'Overall');
 
-        $products = DmartReceipt::where('user_id', Auth::id())
+        // Available Filter Options for this Vendor
+        $availableYears = DmartReceipt::where('user_id', $userId)
             ->where('vendor', $vendor->name)
+            ->selectRaw('DISTINCT YEAR(purchased_at) as year')
+            ->orderBy('year', 'desc')
+            ->pluck('year');
+
+        $availableMonths = DmartReceipt::where('user_id', $userId)
+            ->where('vendor', $vendor->name)
+            ->when($selectedYear !== 'Overall', fn($q) => $q->whereYear('purchased_at', $selectedYear))
+            ->selectRaw('DISTINCT MONTHNAME(purchased_at) as month')
+            ->pluck('month');
+
+        $products = DmartReceipt::where('user_id', $userId)
+            ->where('vendor', $vendor->name)
+            ->when($selectedYear !== 'Overall', fn($q) => $q->whereYear('purchased_at', $selectedYear))
+            ->when($selectedMonth !== 'Overall', fn($q) => $q->whereRaw('MONTHNAME(purchased_at) = ?', [$selectedMonth]))
             ->when($search, function ($query, $search) {
                 $query->where('particulars', 'like', "%{$search}%");
             })
-            ->orderBy('created_at', 'desc')
+            ->orderBy('purchased_at', 'desc')
             ->paginate(20)
             ->withQueryString();
 
         return Inertia::render('VendorProducts', [
             'vendor' => $vendor,
             'products' => $products,
-            'filters' => $request->only(['search']),
+            'filters' => [
+                'search' => $search,
+                'month' => $selectedMonth,
+                'year' => $selectedYear
+            ],
+            'availableYears' => $availableYears,
+            'availableMonths' => $availableMonths
         ]);
     }
 

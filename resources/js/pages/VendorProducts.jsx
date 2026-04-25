@@ -2,7 +2,7 @@ import React from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 
-export default function VendorProducts({ vendor, products, filters }) {
+export default function VendorProducts({ vendor, products, filters, availableYears, availableMonths }) {
     const [search, setSearch] = React.useState(filters.search || '');
 
     React.useEffect(() => {
@@ -10,7 +10,7 @@ export default function VendorProducts({ vendor, products, filters }) {
             if (search !== (filters.search || '')) {
                 router.get(
                     route('vendors.products', vendor.id),
-                    { search },
+                    { ...filters, search },
                     { preserveState: true, preserveScroll: true, replace: true }
                 );
             }
@@ -18,6 +18,15 @@ export default function VendorProducts({ vendor, products, filters }) {
 
         return () => clearTimeout(delayDebounceFn);
     }, [search]);
+
+    const handleFilterChange = (month) => {
+        router.get(route('vendors.products', vendor.id), { ...filters, month, search }, { preserveState: true, preserveScroll: true });
+    };
+
+    const handleYearChange = (year) => {
+        router.get(route('vendors.products', vendor.id), { year, month: 'Overall', search }, { preserveState: true, preserveScroll: true });
+    };
+
     const handleDelete = (id) => {
         if (window.confirm("Are you sure you want to delete this entry?")) {
             router.delete(`/expenses/${id}`, {
@@ -42,12 +51,12 @@ export default function VendorProducts({ vendor, products, filters }) {
                                 🏢
                             </div>
                             <div>
-                                <h3 className="text-3xl font-black text-gray-900">{vendor.name}</h3>
+                                <h3 className="text-3xl font-black text-gray-900 tracking-tight">{vendor.name}</h3>
                                 <div className="flex flex-wrap gap-2 mt-2">
-                                    <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-100">
+                                    <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-[10px] font-black border border-green-100 uppercase tracking-wider">
                                         GSTIN: {vendor.gstin || 'N/A'}
                                     </span>
-                                    <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-100">
+                                    <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black border border-blue-100 uppercase tracking-wider">
                                         📞 {vendor.contact_number || 'N/A'}
                                     </span>
                                 </div>
@@ -56,34 +65,70 @@ export default function VendorProducts({ vendor, products, filters }) {
                         <div className="flex flex-wrap shadow-sm bg-gray-50/50 p-2 rounded-2xl gap-3">
                             <Link 
                                 href={route('dashboard')}
-                                className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-indigo-700 hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/30 transition-all duration-300 flex items-center gap-2"
+                                className="bg-gray-800 text-white font-bold py-2.5 px-6 rounded-xl hover:bg-gray-900 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 flex items-center gap-2"
                             >
                                 🏠 Dashboard
                             </Link>
                             <Link 
                                 href={route('vendors.explorer')}
-                                className="bg-emerald-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-emerald-700 hover:-translate-y-1 hover:shadow-lg hover:shadow-emerald-500/30 transition-all duration-300 flex items-center gap-2"
+                                className="bg-emerald-600 text-white font-bold py-2.5 px-6 rounded-xl hover:bg-emerald-700 hover:-translate-y-1 hover:shadow-lg hover:shadow-emerald-500/30 transition-all duration-300 flex items-center gap-2"
                             >
                                 🔍 Explorer
                             </Link>
                             <Link 
-                                href="/expenses"
-                                className="bg-gray-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-700 hover:-translate-y-1 hover:shadow-lg shadow-gray-500/30 transition-all duration-300 flex items-center gap-2"
-                            >
-                                📄 History
-                            </Link>
-                            <Link 
-                                href={route('vendors.index')}
-                                className="bg-gray-800 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-900 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 flex items-center gap-2"
-                            >
-                                ⬅️ Back
-                            </Link>
-                            <Link 
                                 href="/expenses/create"
-                                className="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-300 flex items-center gap-2"
+                                className="bg-blue-600 text-white font-bold py-2.5 px-6 rounded-xl hover:bg-blue-700 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-300 flex items-center gap-2"
                             >
                                 + Add Product
                             </Link>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        {/* Year Filter */}
+                        <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Select Year:</span>
+                            <div className="flex flex-wrap gap-2">
+                                {['Overall', ...availableYears].map((year) => {
+                                    const isActive = filters.year.toString() === year.toString();
+                                    return (
+                                        <button
+                                            key={year}
+                                            onClick={() => handleYearChange(year)}
+                                            className={`px-5 py-2 rounded-xl font-bold text-xs transition-all duration-300 ${
+                                                isActive 
+                                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30 ring-2 ring-indigo-300' 
+                                                : 'bg-white text-gray-600 hover:bg-indigo-50 hover:text-indigo-600 border border-gray-100 shadow-sm'
+                                            }`}
+                                        >
+                                            {year}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Month Filter */}
+                        <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Select Month:</span>
+                            <div className="flex flex-wrap gap-2">
+                                {['Overall', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month) => {
+                                    const isActive = filters.month === month;
+                                    return (
+                                        <button
+                                            key={month}
+                                            onClick={() => handleFilterChange(month)}
+                                            className={`px-4 py-2 rounded-xl font-bold text-xs transition-all duration-300 ${
+                                                isActive 
+                                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-300' 
+                                                : 'bg-white text-gray-600 hover:bg-blue-50 hover:text-blue-600 border border-gray-100 shadow-sm'
+                                            }`}
+                                        >
+                                            {month === 'Overall' ? 'Overall' : month.substring(0, 3)}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
 

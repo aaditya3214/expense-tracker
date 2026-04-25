@@ -15,12 +15,26 @@ class DmartReceiptController extends Controller
     // 1. SHOW HISTORY
     public function index(Request $request)
     {
+        $userId = Auth::id();
         $search = $request->input('search');
+        $selectedMonth = $request->query('month', 'Overall');
+        $selectedYear = $request->query('year', 'Overall');
 
-        // Using query() builder for better IDE support and static analysis
+        // Available Filter Options
+        $availableYears = DmartReceipt::where('user_id', $userId)
+            ->selectRaw('DISTINCT YEAR(purchased_at) as year')
+            ->orderBy('year', 'desc')
+            ->pluck('year');
+
+        $availableMonths = DmartReceipt::where('user_id', $userId)
+            ->when($selectedYear !== 'Overall', fn($q) => $q->whereYear('purchased_at', $selectedYear))
+            ->selectRaw('DISTINCT MONTHNAME(purchased_at) as month')
+            ->pluck('month');
+
         $items = DmartReceipt::query()
-            ->where('user_id', Auth::id())
-            ->orderBy('purchased_at', 'desc')
+            ->where('user_id', $userId)
+            ->when($selectedYear !== 'Overall', fn($q) => $q->whereYear('purchased_at', $selectedYear))
+            ->when($selectedMonth !== 'Overall', fn($q) => $q->whereRaw('MONTHNAME(purchased_at) = ?', [$selectedMonth]))
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('particulars', 'like', "%{$search}%")
@@ -28,12 +42,19 @@ class DmartReceiptController extends Controller
                         ->orWhere('vendor', 'like', "%{$search}%");
                 });
             })
-            ->paginate(10)
+            ->orderBy('purchased_at', 'desc')
+            ->paginate(15)
             ->withQueryString();
 
         return Inertia::render('History', [
             'items' => $items,
-            'filters' => $request->only(['search']),
+            'filters' => [
+                'search' => $search,
+                'month' => $selectedMonth,
+                'year' => $selectedYear
+            ],
+            'availableYears' => $availableYears,
+            'availableMonths' => $availableMonths
         ]);
     }
 
@@ -128,6 +149,12 @@ class DmartReceiptController extends Controller
 
         $validated['user_id'] = Auth::id(); 
         $validated['purchased_at'] = $validated['purchased_at'] ?? now()->format('Y-m-d');
+
+        // Automatically register vendor if it doesn't exist
+        Vendor::firstOrCreate(
+            ['user_id' => Auth::id(), 'name' => $validated['vendor']],
+            ['contact_number' => 'N/A', 'gstin' => 'N/A', 'address' => 'N/A']
+        );
 
         DmartReceipt::create($validated);
 
