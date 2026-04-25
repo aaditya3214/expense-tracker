@@ -29,6 +29,12 @@ export default function History({ items, filters, availableYears, availableMonth
         }
     };
 
+    const handleClearAll = () => {
+        if (window.confirm("🚨 Are you sure? It cannot be undone! This will remove all your records permanently.")) {
+            router.post(route('expenses.clear-all'));
+        }
+    };
+
     return (
         <AuthenticatedLayout header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Purchase History</h2>}>
             <div className="max-w-7xl mx-auto mt-10 p-6 bg-gray-50 rounded-xl shadow-lg">
@@ -54,6 +60,13 @@ export default function History({ items, filters, availableYears, availableMonth
                                 className="border border-gray-200 bg-gray-50/50 rounded-xl px-4 py-2.5 w-full md:w-64 hover:shadow-md hover:border-blue-400 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 focus:outline-none shadow-sm transition-all duration-300 font-bold" 
                             />
                         </div>
+
+                        <button 
+                            onClick={handleClearAll}
+                            className="bg-red-500 text-white font-bold py-2.5 px-4 rounded-xl hover:bg-red-600 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 text-sm"
+                        >
+                            🗑️ Clear All
+                        </button>
 
                         <Link href="/expenses/create" className="bg-blue-600 text-white font-bold py-2.5 px-6 rounded-xl hover:bg-blue-700 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-300">
                             + Add Expense

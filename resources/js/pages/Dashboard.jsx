@@ -91,7 +91,7 @@ export default function Dashboard({ monthlyData, itemData, vendorData, costliest
                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-2">Select Year:</span>
                 <div className="flex flex-wrap gap-2">
                     {['Overall', ...availableYears].map((year) => {
-                        const isActive = filters.year.toString() === year.toString();
+                        const isActive = String(filters.year) === String(year);
                         return (
                             <button
                                 key={year}
@@ -165,8 +165,8 @@ export default function Dashboard({ monthlyData, itemData, vendorData, costliest
     };
 
     const handleClearAll = () => {
-        if (window.confirm("🚨 WARNING: Are you absolutely sure? This will delete ALL your records and cannot be undone!")) {
-            router.post('/expenses/clear-all');
+        if (window.confirm("🚨 Are you sure? It cannot be undone! This will remove all your records permanently.")) {
+            router.post(route('expenses.clear-all'));
         }
     };
 
@@ -181,6 +181,12 @@ export default function Dashboard({ monthlyData, itemData, vendorData, costliest
                         <p className="text-gray-500 font-medium mt-1">Purchase Product Summary</p>
                     </div>
                     <div className="flex flex-wrap justify-center md:justify-end gap-3 w-full md:w-auto">
+                        <button 
+                            onClick={handleClearAll}
+                            className="bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 text-sm"
+                        >
+                            🗑️ Clear All
+                        </button>
                         <Link href="/expenses/create" className="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 hover:-translate-y-1 hover:shadow-lg transition-all duration-300">+ Add Expense</Link>
                     </div>
                 </div>
@@ -224,7 +230,7 @@ export default function Dashboard({ monthlyData, itemData, vendorData, costliest
                         onClick={handleClearAll}
                         className="bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 text-sm"
                     >
-                        🗑️ Clear
+                        🗑️ Clear All
                     </button>
                     <Link 
                         href={route('vendors.explorer')} 
