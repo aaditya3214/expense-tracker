@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DmartReceipt extends Model
 {
@@ -20,4 +21,12 @@ class DmartReceipt extends Model
         'value',
         'vendor',
     ];
+
+    /**
+     * Get the user that owns the receipt.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 }

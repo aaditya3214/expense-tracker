@@ -2,17 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\DmartReceipt;
 use App\Models\Vendor;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class VendorController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $vendors = Vendor::where('user_id', Auth::id())
+        $vendors = $request->user()->vendors()
             ->orderBy('name')
             ->get();
 
@@ -30,16 +28,14 @@ class VendorController extends Controller
             'address' => 'nullable|string',
         ]);
 
-        $validated['user_id'] = Auth::id();
-
-        Vendor::create($validated);
+        $request->user()->vendors()->create($validated);
 
         return back()->with('success', 'Vendor registered successfully.');
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $vendor = Vendor::where('user_id', Auth::id())->findOrFail($id);
+        $vendor = $request->user()->vendors()->findOrFail($id);
         $vendor->delete();
 
         return back()->with('success', 'Vendor deleted successfully.');
@@ -47,30 +43,30 @@ class VendorController extends Controller
 
     public function showProducts(Request $request, $id)
     {
-        $userId = Auth::id();
-        $vendor = Vendor::where('user_id', $userId)->findOrFail($id);
-        
+        $user = $request->user();
+        $vendor = $user->vendors()->findOrFail($id);
+
         $search = $request->input('search');
         $selectedMonth = $request->query('month', 'Overall');
         $selectedYear = $request->query('year', 'Overall');
 
         // Available Filter Options for this Vendor
-        $availableYears = DmartReceipt::where('user_id', $userId)
+        $availableYears = $user->receipts()
             ->where('vendor', $vendor->name)
             ->selectRaw('DISTINCT YEAR(purchased_at) as year')
             ->orderBy('year', 'desc')
             ->pluck('year');
 
-        $availableMonths = DmartReceipt::where('user_id', $userId)
+        $availableMonths = $user->receipts()
             ->where('vendor', $vendor->name)
-            ->when($selectedYear !== 'Overall', fn($q) => $q->whereYear('purchased_at', $selectedYear))
+            ->when($selectedYear !== 'Overall', fn ($q) => $q->whereYear('purchased_at', $selectedYear))
             ->selectRaw('DISTINCT MONTHNAME(purchased_at) as month')
             ->pluck('month');
 
-        $products = DmartReceipt::where('user_id', $userId)
+        $products = $user->receipts()
             ->where('vendor', $vendor->name)
-            ->when($selectedYear !== 'Overall', fn($q) => $q->whereYear('purchased_at', $selectedYear))
-            ->when($selectedMonth !== 'Overall', fn($q) => $q->whereRaw('MONTHNAME(purchased_at) = ?', [$selectedMonth]))
+            ->when($selectedYear !== 'Overall', fn ($q) => $q->whereYear('purchased_at', $selectedYear))
+            ->when($selectedMonth !== 'Overall', fn ($q) => $q->whereRaw('MONTHNAME(purchased_at) = ?', [$selectedMonth]))
             ->when($search, function ($query, $search) {
                 $query->where('particulars', 'like', "%{$search}%");
             })
@@ -84,16 +80,16 @@ class VendorController extends Controller
             'filters' => [
                 'search' => $search,
                 'month' => $selectedMonth,
-                'year' => $selectedYear
+                'year' => $selectedYear,
             ],
             'availableYears' => $availableYears,
-            'availableMonths' => $availableMonths
+            'availableMonths' => $availableMonths,
         ]);
     }
 
     public function explorer(Request $request)
     {
-        $vendors = Vendor::where('user_id', Auth::id())->orderBy('name')->get();
+        $vendors = $request->user()->vendors()->orderBy('name')->get();
 
         return Inertia::render('VendorExplorer', [
             'vendors' => $vendors,

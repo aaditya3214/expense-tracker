@@ -2,10 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\DmartReceipt;
 use App\Models\Vendor;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 // Authentication facade imported for secure access control
@@ -15,26 +13,25 @@ class DmartReceiptController extends Controller
     // 1. SHOW HISTORY
     public function index(Request $request)
     {
-        $userId = Auth::id();
+        $user = $request->user();
         $search = $request->input('search');
         $selectedMonth = $request->query('month', 'Overall');
         $selectedYear = $request->query('year', 'Overall');
 
         // Available Filter Options
-        $availableYears = DmartReceipt::where('user_id', $userId)
+        $availableYears = $user->receipts()
             ->selectRaw('DISTINCT YEAR(purchased_at) as year')
             ->orderBy('year', 'desc')
             ->pluck('year');
 
-        $availableMonths = DmartReceipt::where('user_id', $userId)
-            ->when($selectedYear !== 'Overall', fn($q) => $q->whereYear('purchased_at', $selectedYear))
+        $availableMonths = $user->receipts()
+            ->when($selectedYear !== 'Overall', fn ($q) => $q->whereYear('purchased_at', $selectedYear))
             ->selectRaw('DISTINCT MONTHNAME(purchased_at) as month')
             ->pluck('month');
 
-        $items = DmartReceipt::query()
-            ->where('user_id', $userId)
-            ->when($selectedYear !== 'Overall', fn($q) => $q->whereYear('purchased_at', $selectedYear))
-            ->when($selectedMonth !== 'Overall', fn($q) => $q->whereRaw('MONTHNAME(purchased_at) = ?', [$selectedMonth]))
+        $items = $user->receipts()
+            ->when($selectedYear !== 'Overall', fn ($q) => $q->whereYear('purchased_at', $selectedYear))
+            ->when($selectedMonth !== 'Overall', fn ($q) => $q->whereRaw('MONTHNAME(purchased_at) = ?', [$selectedMonth]))
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('particulars', 'like', "%{$search}%")
@@ -51,10 +48,10 @@ class DmartReceiptController extends Controller
             'filters' => [
                 'search' => $search,
                 'month' => $selectedMonth,
-                'year' => $selectedYear
+                'year' => $selectedYear,
             ],
             'availableYears' => $availableYears,
-            'availableMonths' => $availableMonths
+            'availableMonths' => $availableMonths,
         ]);
     }
 
@@ -63,8 +60,7 @@ class DmartReceiptController extends Controller
     {
         $search = $request->input('search');
 
-        $items = DmartReceipt::query()
-            ->where('user_id', Auth::id())
+        $items = $request->user()->receipts()
             ->orderBy('purchased_at', 'desc')
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
@@ -86,8 +82,7 @@ class DmartReceiptController extends Controller
     {
         $search = $request->input('search');
 
-        $items = DmartReceipt::query()
-            ->where('user_id', Auth::id())
+        $items = $request->user()->receipts()
             ->orderBy('purchased_at', 'desc')
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
@@ -122,9 +117,9 @@ class DmartReceiptController extends Controller
     }
 
     // 4. CREATE PAGE
-    public function create()
+    public function create(Request $request)
     {
-        $vendors = Vendor::where('user_id', Auth::id())
+        $vendors = $request->user()->vendors()
             ->orderBy('name')
             ->get();
 
@@ -147,16 +142,15 @@ class DmartReceiptController extends Controller
             'vendor' => 'required|string',
         ]);
 
-        $validated['user_id'] = Auth::id(); 
         $validated['purchased_at'] = $validated['purchased_at'] ?? now()->format('Y-m-d');
 
         // Automatically register vendor if it doesn't exist
-        Vendor::firstOrCreate(
-            ['user_id' => Auth::id(), 'name' => $validated['vendor']],
+        $request->user()->vendors()->firstOrCreate(
+            ['name' => $validated['vendor']],
             ['contact_number' => 'N/A', 'gstin' => 'N/A', 'address' => 'N/A']
         );
 
-        DmartReceipt::create($validated);
+        $request->user()->receipts()->create($validated);
 
         return redirect()->route('expenses.index');
     }
@@ -170,8 +164,8 @@ class DmartReceiptController extends Controller
         fgetcsv($fileHandle); // Skip header
 
         // Ensure "DMart" vendor exists for this user
-        Vendor::firstOrCreate(
-            ['user_id' => Auth::id(), 'name' => 'DMart'],
+        $request->user()->vendors()->firstOrCreate(
+            ['name' => 'DMart'],
             ['contact_number' => 'N/A', 'gstin' => 'N/A', 'address' => 'N/A']
         );
 
@@ -184,13 +178,12 @@ class DmartReceiptController extends Controller
             $vendorName = (str_contains(strtoupper($particulars), 'STAR')) ? 'Star Bazaar' : 'DMart';
 
             // Ensure the detected vendor exists
-            Vendor::firstOrCreate(
-                ['user_id' => Auth::id(), 'name' => $vendorName],
+            $request->user()->vendors()->firstOrCreate(
+                ['name' => $vendorName],
                 ['contact_number' => 'N/A', 'gstin' => 'N/A', 'address' => 'N/A']
             );
 
-            DmartReceipt::create([
-                'user_id' => Auth::id(),
+            $request->user()->receipts()->create([
                 'purchased_at' => date('Y-m-d', strtotime($row[0])),
                 'hsn' => $row[1] ?? '-',
                 'particulars' => $particulars,
@@ -207,14 +200,24 @@ class DmartReceiptController extends Controller
     }
 
     // 7. SECURE DELETE
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $item = DmartReceipt::query()
-            ->where('user_id', Auth::id())
-            ->findOrFail($id);
+        $item = $request->user()->receipts()->findOrFail($id);
 
         $item->delete();
 
         return redirect()->back();
+    }
+
+    // 8. CLEAR ALL
+    public function clearAll(Request $request)
+    {
+        $user = $request->user();
+        
+        // Remove all receipts and vendors associated with this user
+        $user->receipts()->delete();
+        $user->vendors()->delete();
+
+        return redirect()->route('dashboard');
     }
 }
