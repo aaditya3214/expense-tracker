@@ -13,6 +13,14 @@ class DashboardController extends Controller
         $user = $request->user();
         $selectedMonth = $request->query('month', 'Overall');
         $selectedYear = $request->query('year', 'Overall');
+        $startDate = $request->query('start_date', '');
+        $endDate = $request->query('end_date', '');
+
+        if (! empty($startDate) && ! empty($endDate) && $startDate > $endDate) {
+            $temp = $startDate;
+            $startDate = $endDate;
+            $endDate = $temp;
+        }
 
         // 1. Available Years & Months for Filters
         $availableYears = $user->receipts()
@@ -36,12 +44,16 @@ class DashboardController extends Controller
         // 2. Base Analytics Query
         $baseQuery = $user->receipts();
 
-        if ($selectedYear !== 'Overall') {
-            $baseQuery->whereYear('purchased_at', $selectedYear);
-        }
+        if (! empty($startDate) && ! empty($endDate)) {
+            $baseQuery->whereBetween('purchased_at', [$startDate, $endDate]);
+        } else {
+            if ($selectedYear !== 'Overall') {
+                $baseQuery->whereYear('purchased_at', $selectedYear);
+            }
 
-        if ($selectedMonth !== 'Overall') {
-            $baseQuery->whereRaw('MONTHNAME(purchased_at) = ?', [$selectedMonth]);
+            if ($selectedMonth !== 'Overall') {
+                $baseQuery->whereRaw('MONTHNAME(purchased_at) = ?', [$selectedMonth]);
+            }
         }
 
         // 3. Monthly Trend Data
@@ -54,8 +66,12 @@ class DashboardController extends Controller
             ->groupBy('month', 'month_num')
             ->orderBy('month_num');
 
-        if ($selectedYear !== 'Overall') {
-            $trendQuery->whereYear('purchased_at', $selectedYear);
+        if (! empty($startDate) && ! empty($endDate)) {
+            $trendQuery->whereBetween('purchased_at', [$startDate, $endDate]);
+        } else {
+            if ($selectedYear !== 'Overall') {
+                $trendQuery->whereYear('purchased_at', $selectedYear);
+            }
         }
 
         $monthlyData = $trendQuery->get();
@@ -93,6 +109,8 @@ class DashboardController extends Controller
             'filters' => [
                 'month' => $selectedMonth,
                 'year' => $selectedYear,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
             ],
             'availableMonths' => $availableMonths,
             'availableYears' => $availableYears,

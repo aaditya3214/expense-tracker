@@ -26,11 +26,11 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - pestphp/pest (PEST) - v4
 - phpunit/phpunit (PHPUNIT) - v12
 - \@inertiajs/react (INERTIA_REACT) - v2
-- react (REACT) - v18
 - tailwindcss (TAILWINDCSS) - v3
 - \@laravel/vite-plugin-wayfinder (WAYFINDER_VITE) - v0
 - eslint (ESLINT) - v9
 - prettier (PRETTIER) - v3
+- react (REACT) - v19
 
 ## Skills Activation
 

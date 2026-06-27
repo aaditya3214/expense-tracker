@@ -16,6 +16,9 @@ export default function OcrScanner({ show, onClose, defaultVendors = [] }) {
     // OCR Results
     const [vendor, setVendor] = useState('');
     const [purchasedAt, setPurchasedAt] = useState('');
+    const [vendorGstin, setVendorGstin] = useState('');
+    const [vendorAddress, setVendorAddress] = useState('');
+    const [vendorPhone, setVendorPhone] = useState('');
     const [items, setItems] = useState([]);
     
     const fileInputRef = useRef(null);
@@ -37,6 +40,9 @@ export default function OcrScanner({ show, onClose, defaultVendors = [] }) {
             setStatusText('');
             setVendor('');
             setPurchasedAt('');
+            setVendorGstin('');
+            setVendorAddress('');
+            setVendorPhone('');
             setItems([]);
         }
     }, [show]);
@@ -82,40 +88,125 @@ export default function OcrScanner({ show, onClose, defaultVendors = [] }) {
         reader.readAsDataURL(file);
     };
 
-    // Run OCR Recognition using Tesseract.js
+    // Preprocess image for OCR using canvas (Grayscale, Contrast stretching, Binarization, and 2x Upscaling)
+    const preprocessImage = (file) => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // 2x Upscaling for low-res receipts
+                    const scale = 2;
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+                    
+                    // Disable smoothing to maintain sharp boundaries for text
+                    ctx.imageSmoothingEnabled = false;
+                    
+                    // Apply GPU-accelerated filters to boost text contrast and remove paper color
+                    ctx.filter = 'grayscale(1) contrast(3.5) brightness(0.9)';
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imgData.data;
+                    
+                    // Perform pixel-level binarization for maximum OCR readability
+                    for (let i = 0; i < data.length; i += 4) {
+                        // Binarization: threshold value around 128
+                        const v = data[i] < 128 ? 0 : 255;
+                        data[i] = v;
+                        data[i + 1] = v;
+                        data[i + 2] = v;
+                    }
+                    
+                    ctx.putImageData(imgData, 0, 0);
+                    
+                    // Convert canvas to jpeg Blob
+                    canvas.toBlob((blob) => {
+                        resolve(blob || file);
+                    }, 'image/jpeg', 0.9);
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+
+    // Run OCR Recognition using Mindee API with local Tesseract.js fallback
     const startOcrScan = async () => {
         if (!imageFile) return;
         setStep(2);
         setProgress(0);
-        setStatusText('Initializing OCR Engine...');
+        setStatusText('Uploading to receipt parser...');
 
         try {
-            const result = await Tesseract.recognize(
-                imageFile,
-                'eng',
-                {
-                    logger: (m) => {
-                        if (m.status === 'recognizing text') {
-                            setProgress(Math.round(m.progress * 100));
-                            setStatusText(`Extracting receipt text: ${Math.round(m.progress * 100)}%`);
-                        } else {
-                            setStatusText(m.status.charAt(0).toUpperCase() + m.status.slice(1).replace(/_/g, ' '));
-                        }
-                    }
-                }
-            );
+            const formData = new FormData();
+            formData.append('image', imageFile);
 
-            // Parse text
-            const parsed = parseReceiptText(result.data.text);
+            const response = await fetch('/expenses/ocr-parse', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                },
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Server error');
+            }
+
+            const parsed = await response.json();
             
             setVendor(parsed.vendor);
             setPurchasedAt(parsed.date);
+            setVendorGstin(parsed.gstin);
+            setVendorAddress(parsed.address);
+            setVendorPhone(parsed.phone);
             setItems(parsed.items);
             setStep(3);
+
         } catch (error) {
-            console.error('OCR Scanning failed', error);
-            alert('OCR Scan failed. Please try a clearer receipt photo or enter manually.');
-            setStep(1);
+            console.warn('Mindee API parse failed or not configured, falling back to local Tesseract OCR:', error);
+            
+            setStatusText('Preprocessing receipt image (local fallback)...');
+            try {
+                const processedFile = await preprocessImage(imageFile);
+                setStatusText('Initializing local OCR Engine...');
+
+                const result = await Tesseract.recognize(
+                    processedFile,
+                    'eng',
+                    {
+                        logger: (m) => {
+                            if (m.status === 'recognizing text') {
+                                setProgress(Math.round(m.progress * 100));
+                                setStatusText(`Extracting receipt text (local): ${Math.round(m.progress * 100)}%`);
+                            } else {
+                                setStatusText(m.status.charAt(0).toUpperCase() + m.status.slice(1).replace(/_/g, ' '));
+                            }
+                        }
+                    }
+                );
+
+                // Parse text
+                const parsed = parseReceiptText(result.data.text);
+                
+                setVendor(parsed.vendor);
+                setPurchasedAt(parsed.date);
+                setVendorGstin(parsed.gstin);
+                setVendorAddress(parsed.address);
+                setVendorPhone(parsed.phone);
+                setItems(parsed.items);
+                setStep(3);
+            } catch (tessError) {
+                console.error('OCR local fallback failed:', tessError);
+                alert('OCR Scan failed. Please try a clearer receipt photo or enter manually.');
+                setStep(1);
+            }
         }
     };
 
@@ -124,12 +215,23 @@ export default function OcrScanner({ show, onClose, defaultVendors = [] }) {
         const lines = text.split('\n');
         let detectedVendor = '';
         let detectedDate = '';
+        let detectedGstin = '';
+        let detectedAddress = '';
+        let detectedPhone = '';
         const extractedItems = [];
 
+        // Helper to clean noisy OCR digits (e.g. O/o -> 0, I/l/|/! -> 1, B -> 8)
+        const cleanOcrDigits = (str) => {
+            return str
+                .replace(/[Oo]/g, '0')
+                .replace(/[Il|!]/g, '1')
+                .replace(/B/g, '8');
+        };
+
         const commonVendors = [
-            { name: 'DMart', keywords: ['dmart', 'avenue supermarts', 'avenue'] },
-            { name: 'Star Bazaar', keywords: ['star bazaar', 'trent', 'star hyper'] },
-            { name: 'Reliance Smart', keywords: ['reliance smart', 'reliance retail', 'smart bazaar'] },
+            { name: 'DMart', keywords: ['dmart', 'd mart', 'd-mart', 'dz mart', 'avenue', 'supermart', 'sd road', 's d road'] },
+            { name: 'Star Bazaar', keywords: ['star bazaar', 'starbazaar', 'trent', 'star hyper'] },
+            { name: 'Reliance Smart', keywords: ['reliance smart', 'reliance retail', 'smart bazaar', 'smartbazaar'] },
             { name: 'Reliance Fresh', keywords: ['reliance fresh'] },
             { name: 'Big Bazaar', keywords: ['big bazaar', 'future retail'] },
             { name: 'Blinkit', keywords: ['blinkit', 'grofers'] },
@@ -140,7 +242,7 @@ export default function OcrScanner({ show, onClose, defaultVendors = [] }) {
         ];
 
         // 1. Detect Vendor
-        for (let i = 0; i < Math.min(lines.length, 10); i++) {
+        for (let i = 0; i < Math.min(lines.length, 12); i++) {
             const lineLower = lines[i].toLowerCase();
             for (const vendor of commonVendors) {
                 if (vendor.keywords.some(kw => lineLower.includes(kw))) {
@@ -161,11 +263,16 @@ export default function OcrScanner({ show, onClose, defaultVendors = [] }) {
             }
         }
 
-        // Fallback: Use first non-empty readable line
+        // Fallback: Use first non-empty readable line that is not a generic header
+        const genericHeaders = ['invoice', 'tax', 'retail', 'welcome', 'duplicate', 'bill', 'cash', 'memo', 'original', 'simpl', 'receipt', 'phone', 'tel'];
         if (!detectedVendor) {
-            for (let i = 0; i < Math.min(lines.length, 5); i++) {
+            for (let i = 0; i < Math.min(lines.length, 8); i++) {
                 const cleanLine = lines[i].replace(/[^\w\s]/g, '').trim();
+                const cleanLineLower = cleanLine.toLowerCase();
                 if (cleanLine.length > 3 && /[a-zA-Z]/.test(cleanLine)) {
+                    if (genericHeaders.some(header => cleanLineLower.includes(header))) {
+                        continue;
+                    }
                     detectedVendor = cleanLine.substring(0, 25);
                     break;
                 }
@@ -175,34 +282,55 @@ export default function OcrScanner({ show, onClose, defaultVendors = [] }) {
             detectedVendor = 'Local Vendor';
         }
 
-        // 2. Detect Date
-        const dateRegexes = [
-            /\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\b/, // DD/MM/YYYY
-            /\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b/, // YYYY-MM-DD
-            /\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})\b/  // DD/MM/YY
-        ];
+        // 2. Detect Date (allowing character noise and cleaning it)
+        let dateFound = false;
+        // Search for DD/MM/YYYY, YYYY-MM-DD or DD/MM/YY allowing OCR noise like O, I, B, o, l
+        const noisyDateRegex = /\b([0-9OolI|!B]{1,4})[-/.\s]+([0-9OolI|!B]{1,2})[-/.\s]+([0-9OolI|!B]{2,4})\b/;
 
+        const parseDateStr = (match) => {
+            const part1 = cleanOcrDigits(match[1]).padStart(2, '0');
+            const part2 = cleanOcrDigits(match[2]).padStart(2, '0');
+            const part3 = cleanOcrDigits(match[3]);
+
+            if (part1.length === 4) {
+                // YYYY-MM-DD
+                return `${part1}-${part2}-${part3}`;
+            } else {
+                // DD-MM-YYYY or DD-MM-YY
+                const year = part3.length === 2 ? '20' + part3 : part3;
+                return `${year}-${part2}-${part1}`;
+            }
+        };
+
+        // First Pass: Prioritize lines with date labels
         for (const line of lines) {
-            let match = line.match(dateRegexes[0]);
-            if (match) {
-                const day = match[1].padStart(2, '0');
-                const month = match[2].padStart(2, '0');
-                const year = match[3];
-                detectedDate = `${year}-${month}-${day}`;
-                break;
+            const lineLower = line.toLowerCase();
+            if (lineLower.includes('date') || lineLower.includes('dt') || lineLower.includes('inv') || lineLower.includes('time') || lineLower.includes('bill')) {
+                const match = line.match(noisyDateRegex);
+                if (match) {
+                    const parsedDate = parseDateStr(match);
+                    // Basic sanity check: year must start with 20
+                    if (parsedDate && parsedDate.startsWith('20')) {
+                        detectedDate = parsedDate;
+                        dateFound = true;
+                        break;
+                    }
+                }
             }
-            match = line.match(dateRegexes[1]);
-            if (match) {
-                detectedDate = `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
-                break;
-            }
-            match = line.match(dateRegexes[2]);
-            if (match) {
-                const day = match[1].padStart(2, '0');
-                const month = match[2].padStart(2, '0');
-                const year = '20' + match[3];
-                detectedDate = `${year}-${month}-${day}`;
-                break;
+        }
+
+        // Second Pass: Fallback to any date match in the receipt text
+        if (!dateFound) {
+            for (const line of lines) {
+                const match = line.match(noisyDateRegex);
+                if (match) {
+                    const parsedDate = parseDateStr(match);
+                    if (parsedDate && parsedDate.startsWith('20')) {
+                        detectedDate = parsedDate;
+                        dateFound = true;
+                        break;
+                    }
+                }
             }
         }
 
@@ -210,139 +338,263 @@ export default function OcrScanner({ show, onClose, defaultVendors = [] }) {
             detectedDate = new Date().toISOString().split('T')[0];
         }
 
-        // 3. Extract items
-        const itemLines = [];
-        const stopWords = ['total', 'subtotal', 'cgst', 'sgst', 'vat', 'tax', 'cash', 'card', 'change', 'saved', 'items', 'net amt', 'amount', 'round off', 'balance', 'discount', 'welcome', 'thank you', 'tel:', 'phone:', 'gstin', 'cin:'];
-
+        // 3. Extract GSTIN (Fuzzy match that catches scrambled characters like J8AACEAEHS2t 125)
+        const gstinKeywords = ['gstin', 'gotin', 'gst', 'tin', 'reg'];
         for (const line of lines) {
-            const lineLower = line.toLowerCase().trim();
-            if (lineLower.length < 5) continue;
-            if (stopWords.some(word => lineLower.includes(word))) continue;
-            itemLines.push(line);
+            const lineLower = line.toLowerCase();
+            if (gstinKeywords.some(kw => lineLower.includes(kw))) {
+                // Remove keyword and non-alphanumeric chars
+                const cleanToken = line.replace(/gotin|gstin|gst|tin/i, '').replace(/[^a-zA-Z0-9]/g, '');
+                // Search for a 12-16 character alphanumeric block
+                const match = cleanToken.match(/[a-zA-Z0-9]{12,16}/);
+                if (match) {
+                    detectedGstin = match[0].toUpperCase();
+                    break;
+                }
+            }
         }
 
-        for (const line of itemLines) {
-            const tokens = line.trim().split(/\s+/);
-            const numbers = [];
-            
-            tokens.forEach((token) => {
-                const cleanToken = token.replace(/[^\d.]/g, '');
-                if (cleanToken && !isNaN(cleanToken) && cleanToken.includes('.')) {
-                    numbers.push(parseFloat(cleanToken));
-                } else if (cleanToken && !isNaN(cleanToken) && /^\d+$/.test(cleanToken)) {
-                    numbers.push(parseInt(cleanToken, 10));
+        // Fallback standard regexes
+        if (!detectedGstin) {
+            const gstinMatch = text.match(/GSTIN(?:\s*No\s*|\s*No\.*\s*)?[:.-]?\s*([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[A-Z0-9]{3})/i);
+            if (gstinMatch) {
+                detectedGstin = gstinMatch[1].toUpperCase();
+            } else {
+                const genericGstinMatch = text.match(/\b([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[A-Z0-9]{3})\b/i);
+                if (genericGstinMatch) {
+                    detectedGstin = genericGstinMatch[1].toUpperCase();
                 }
-            });
+            }
+        }
+
+        // 4. Extract Address
+        const addressCandidates = [];
+        const addressKeywords = [
+            'road', 'street', 'lane', 'nagar', 'floor', 'bldg', 'building', 'plot',
+            'shop', 'sector', 'opp', 'opposite', 'near', 'behind',
+            'secunderabad', 'hyderabad', 'mumbai', 'delhi', 'bangalore', 'chennai',
+            'pune', 'kolkata', 'city', 'state', 'district', 'area', 'colony', 'galli',
+            'bypass', 'highway', 'complex', 'plaza', 'mall', 'market', 'circle', 'cross'
+        ];
+        const addressExcludeKeywords = [
+            'phone', 'tel', 'gstin', 'cin', 'fssai', 'date', 'bill', 'invoice', 
+            'cashier', 'email', 'website', 'www.', 'items', 'total', 'round off'
+        ];
+
+        for (let i = 0; i < Math.min(lines.length, 20); i++) {
+            const line = lines[i].trim();
+            const lineLower = line.toLowerCase();
+            
+            // Skip lines containing exclusions
+            if (addressExcludeKeywords.some(kw => lineLower.includes(kw))) {
+                continue;
+            }
+            
+            // Check if line contains any address keyword
+            if (addressKeywords.some(kw => lineLower.includes(kw))) {
+                // Skip if it is just the vendor name itself
+                if (lineLower.includes('dmart') || lineLower.includes('avenue') || lineLower.includes('supermarts')) {
+                    continue;
+                }
+                addressCandidates.push(line);
+            } else if (/^\d+/.test(line) && line.split(/\s+/).length > 2) {
+                // Heuristic: If a line starts with a number (like building 112) and has multiple words, it's likely address
+                if (!lineLower.includes('dmart') && !lineLower.includes('avenue')) {
+                    addressCandidates.push(line);
+                }
+            } else if (/\b\d{6}\b/.test(line)) {
+                // Heuristic: Contains a 6-digit Indian PIN code
+                addressCandidates.push(line);
+            }
+        }
+
+        if (addressCandidates.length > 0) {
+            detectedAddress = addressCandidates.slice(0, 3).join(', ');
+        } else {
+            detectedAddress = 'N/A';
+        }
+
+        // 5. Extract Phone
+        for (let i = 0; i < Math.min(lines.length, 20); i++) {
+            const line = lines[i].trim();
+            const lineLower = line.toLowerCase();
+            if (lineLower.includes('phone') || lineLower.includes('tel:') || lineLower.includes('tel.') || lineLower.includes('mobile') || lineLower.includes('ph no') || lineLower.includes('ph.no')) {
+                const match = line.match(/(?:phone|tel|mobile|ph\s*no|ph\.no|contact)\s*[:.-]?\s*([0-9\s-]{6,15})/i);
+                if (match) {
+                    detectedPhone = match[1].trim();
+                    break;
+                }
+                const numbersOnly = line.replace(/[^\d]/g, '');
+                if (numbersOnly.length >= 6) {
+                    detectedPhone = numbersOnly;
+                    break;
+                }
+            }
+        }
+        if (!detectedPhone) {
+            detectedPhone = 'N/A';
+        }
+
+        // 6. Extract items
+        const stopWords = [
+            'total', 'subtotal', 'cgst', 'sgst', 'igst', 'cess', 'vat', 'tax', 
+            'cash', 'card', 'change', 'saved', 'items', 'net amt', 'amount', 
+            'round off', 'balance', 'discount', 'welcome', 'thank you', 'tel:', 
+            'phone', 'gstin', 'cin', 'fssai', 'cashier', 'bill dt', 'bill no', 
+            'vou.', 'tax invoice', 'road', 'street', 'bldg', 'floor', 'lane', 
+            'nagar', 'secunderabad', 'hyderabad', 'bazaar', 'pincode', 'pin code',
+            'register', 'phone:', 'contact', 'address', 'customer', 'receipt'
+        ];
+
+        const detectUnit = (particulars) => {
+            let unit = 'pcs';
+            const particularsLower = particulars.toLowerCase();
+            if (particularsLower.includes('kg') || particularsLower.includes('k.g.')) {
+                unit = 'kg';
+            } else if (particularsLower.includes(' gm') || particularsLower.includes('g ') || particularsLower.endsWith('g')) {
+                unit = 'g';
+            } else if (particularsLower.includes(' ml') || particularsLower.endsWith('ml')) {
+                unit = 'ml';
+            } else if (particularsLower.includes(' ltr') || particularsLower.endsWith('l') || particularsLower.includes(' liter')) {
+                unit = 'l';
+            } else if (particularsLower.includes('pkt') || particularsLower.includes('packet')) {
+                unit = 'pkt';
+            }
+            return unit;
+        };
+
+        for (const line of lines) {
+            const cleanLine = line.trim();
+            if (cleanLine.length < 3) continue;
+
+            const lineLower = cleanLine.toLowerCase();
+            if (stopWords.some(word => lineLower.includes(word))) continue;
+
+            // Split line into tokens
+            const tokens = cleanLine.split(/\s+/);
+            if (tokens.length === 0) continue;
+
+            // If the line is a single numeric token of 4-10 digits, it might be an HSN code for the previous item
+            if (tokens.length === 1 && /^\d{4,10}$/.test(tokens[0])) {
+                if (extractedItems.length > 0) {
+                    const lastItem = extractedItems[extractedItems.length - 1];
+                    if (lastItem.hsn === '-' || !lastItem.hsn) {
+                        lastItem.hsn = tokens[0];
+                    }
+                }
+                continue;
+            }
+
+            // Extract numbers from right to left at the end of the line
+            const numbers = [];
+            let descriptionTokensEndIndex = tokens.length;
+            
+            for (let i = tokens.length - 1; i >= 0; i--) {
+                const token = tokens[i];
+                // Clean token to see if it is a number (allow decimal points)
+                const cleanToken = token.replace(/[^\d.]/g, '');
+                if (cleanToken && !isNaN(cleanToken) && (cleanToken.includes('.') || /^\d+$/.test(cleanToken))) {
+                    numbers.unshift(parseFloat(cleanToken));
+                    descriptionTokensEndIndex = i;
+                } else {
+                    // Stop as soon as we hit a non-number token
+                    break;
+                }
+            }
 
             if (numbers.length === 0) continue;
+
+            // The remaining tokens form the description
+            const descriptionTokens = tokens.slice(0, descriptionTokensEndIndex);
+            if (descriptionTokens.length === 0) continue;
+
+            let hsn = '-';
+            let particularsTokens = [...descriptionTokens];
+
+            // If the first token of the description is a 4-10 digit number, it's an HSN/Barcode code
+            if (/^\d{4,10}$/.test(descriptionTokens[0])) {
+                hsn = descriptionTokens[0];
+                particularsTokens = descriptionTokens.slice(1);
+            }
+
+            let particulars = particularsTokens.join(' ').trim();
+            // Skip if particulars does not contain any letters (prevents pure number lines from being items)
+            if (!/[a-zA-Z]/.test(particulars) || particulars.length < 3) {
+                continue;
+            }
 
             let qty = 1;
             let rate = 0;
             let value = 0;
-            let hsn = '';
-            let descriptionWords = [];
-
-            let firstTokenIsHsn = false;
-            if (/^\d{4,10}$/.test(tokens[0])) {
-                hsn = tokens[0];
-                firstTokenIsHsn = true;
-            }
 
             if (numbers.length >= 3) {
-                const candidateNumbers = numbers.slice(firstTokenIsHsn ? 1 : 0);
+                value = numbers[numbers.length - 1];
                 let matched = false;
-                
-                for (let i = candidateNumbers.length - 3; i >= 0; i--) {
-                    const n1 = candidateNumbers[i];
-                    const n2 = candidateNumbers[i+1];
-                    const n3 = candidateNumbers[i+2];
-                    
-                    if (Math.abs(n1 * n2 - n3) < 1.0) {
-                        qty = n1;
-                        rate = n2;
-                        value = n3;
-                        matched = true;
-                        const n1Index = tokens.indexOf(tokens.find(t => t.includes(String(n1))));
-                        descriptionWords = tokens.slice(firstTokenIsHsn ? 1 : 0, n1Index);
-                        break;
+
+                // Try to find a pair (n1, n2) that multiplies to value
+                const candidates = numbers.slice(0, -1);
+                for (let i = 0; i < candidates.length; i++) {
+                    for (let j = 0; j < candidates.length; j++) {
+                        if (i === j) continue;
+                        const n1 = candidates[i];
+                        const n2 = candidates[j];
+                        if (Math.abs(n1 * n2 - value) < 1.0) {
+                            qty = n1;
+                            rate = n2;
+                            matched = true;
+                            break;
+                        }
                     }
-                    if (Math.abs(n2 * n1 - n3) < 1.0) {
-                        rate = n1;
-                        qty = n2;
-                        value = n3;
-                        matched = true;
-                        const n1Index = tokens.indexOf(tokens.find(t => t.includes(String(n1))));
-                        descriptionWords = tokens.slice(firstTokenIsHsn ? 1 : 0, n1Index);
-                        break;
-                    }
+                    if (matched) break;
                 }
 
                 if (!matched) {
-                    const len = candidateNumbers.length;
-                    value = candidateNumbers[len - 1];
-                    rate = candidateNumbers[len - 2];
-                    qty = candidateNumbers[len - 3];
-                    
-                    const qtyToken = tokens.find(t => t.includes(String(qty)));
-                    const qtyIndex = tokens.indexOf(qtyToken);
-                    descriptionWords = tokens.slice(firstTokenIsHsn ? 1 : 0, qtyIndex > 0 ? qtyIndex : tokens.length - 3);
+                    // Fallback to last 3 numbers
+                    const len = numbers.length;
+                    value = numbers[len - 1];
+                    rate = numbers[len - 2];
+                    qty = numbers[len - 3];
                 }
             } else if (numbers.length === 2) {
-                const candidateNumbers = numbers;
-                value = candidateNumbers[1];
-                const n1 = candidateNumbers[0];
-                
-                if (n1 > 0 && n1 < 100 && value / n1 > 5) {
+                value = numbers[1];
+                const n1 = numbers[0];
+
+                if (n1 > 0 && n1 < 100 && value / n1 > 1) {
                     qty = n1;
                     rate = value / qty;
                 } else {
                     rate = n1;
                     qty = value / rate;
                 }
-                
-                const n1Index = tokens.indexOf(tokens.find(t => t.includes(String(n1))));
-                descriptionWords = tokens.slice(firstTokenIsHsn ? 1 : 0, n1Index > 0 ? n1Index : tokens.length - 2);
             } else if (numbers.length === 1) {
                 value = numbers[0];
                 rate = value;
                 qty = 1;
-                descriptionWords = tokens.slice(firstTokenIsHsn ? 1 : 0, tokens.length - 1);
             }
 
-            let particulars = descriptionWords.join(' ').trim();
-            particulars = particulars.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9%gGkKlLpP]+$/g, '').trim();
-
-            if (particulars.length >= 3 && /[a-zA-Z]/.test(particulars) && value > 0) {
-                let unit = 'pcs';
-                const particularsLower = particulars.toLowerCase();
-                if (particularsLower.includes('kg') || particularsLower.includes('k.g.')) {
-                    unit = 'kg';
-                } else if (particularsLower.includes(' gm') || particularsLower.includes('g ') || particularsLower.endsWith('g')) {
-                    unit = 'g';
-                } else if (particularsLower.includes(' ml') || particularsLower.endsWith('ml')) {
-                    unit = 'ml';
-                } else if (particularsLower.includes(' ltr') || particularsLower.endsWith('l') || particularsLower.includes(' liter')) {
-                    unit = 'l';
-                } else if (particularsLower.includes('pkt') || particularsLower.includes('packet')) {
-                    unit = 'pkt';
-                }
-
-                extractedItems.push({
-                    purchased_at: detectedDate,
-                    hsn: hsn || '-',
-                    particulars: particulars.substring(0, 100),
-                    qty_kg: Number(qty) || 1,
-                    unit: unit,
-                    n_rate: Number(rate) || Number(value),
-                    value: Number(value),
-                    vendor: detectedVendor
-                });
+            // Prevent database overflow constraints
+            if (rate > 99999 || value > 99999 || qty > 10000 || value <= 0) {
+                continue;
             }
+
+            extractedItems.push({
+                purchased_at: detectedDate,
+                hsn: hsn,
+                particulars: particulars.substring(0, 100),
+                qty_kg: qty,
+                unit: detectUnit(particulars),
+                n_rate: rate,
+                value: value,
+                vendor: detectedVendor
+            });
         }
 
         return {
             vendor: detectedVendor,
             date: detectedDate,
+            gstin: detectedGstin || 'N/A',
+            address: detectedAddress || 'N/A',
+            phone: detectedPhone || 'N/A',
             items: extractedItems
         };
     };
@@ -403,7 +655,15 @@ export default function OcrScanner({ show, onClose, defaultVendors = [] }) {
             return;
         }
 
-        router.post(route('expenses.store-bulk'), { items }, {
+        // Attach vendor details (GSTIN, Address, Phone) to each item
+        const itemsWithVendorDetails = items.map(item => ({
+            ...item,
+            vendor_gstin: vendorGstin,
+            vendor_address: vendorAddress,
+            vendor_phone: vendorPhone
+        }));
+
+        router.post(route('expenses.store-bulk'), { items: itemsWithVendorDetails }, {
             onSuccess: () => {
                 onClose();
             },
@@ -565,17 +825,18 @@ export default function OcrScanner({ show, onClose, defaultVendors = [] }) {
                                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 block">Extracted Information</span>
                                 
                                 {/* Meta Information Row */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
                                     <div>
-                                        <label className="text-xs font-bold text-blue-700 mb-1 ml-1 block uppercase tracking-wider">Detected Vendor</label>
+                                        <label className="text-xs font-bold text-blue-700 mb-1 ml-1 block uppercase tracking-wider">Vendor Name</label>
                                         <div className="relative">
                                             <input 
                                                 list="ocr-vendors"
                                                 type="text" 
                                                 value={vendor} 
                                                 onChange={(e) => handleVendorChange(e.target.value)}
-                                                className="w-full border-blue-200 focus:border-blue-500 focus:ring focus:ring-blue-200 rounded-xl px-4 py-2.5 bg-white text-sm font-semibold"
+                                                className="w-full border-blue-200 focus:border-blue-500 focus:ring focus:ring-blue-200 rounded-xl px-4 py-2 bg-white text-xs font-semibold"
                                                 placeholder="Vendor Name"
+                                                required
                                             />
                                             <datalist id="ocr-vendors">
                                                 {defaultVendors.map((v, i) => <option key={i} value={v} />)}
@@ -588,7 +849,28 @@ export default function OcrScanner({ show, onClose, defaultVendors = [] }) {
                                             type="date" 
                                             value={purchasedAt} 
                                             onChange={(e) => handleDateChange(e.target.value)}
-                                            className="w-full border-blue-200 focus:border-blue-500 focus:ring focus:ring-blue-200 rounded-xl px-4 py-2.5 bg-white text-sm font-semibold"
+                                            className="w-full border-blue-200 focus:border-blue-500 focus:ring focus:ring-blue-200 rounded-xl px-4 py-2 bg-white text-xs font-semibold"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-blue-700 mb-1 ml-1 block uppercase tracking-wider">Vendor GSTIN</label>
+                                        <input 
+                                            type="text" 
+                                            value={vendorGstin} 
+                                            onChange={(e) => setVendorGstin(e.target.value)}
+                                            className="w-full border-blue-200 focus:border-blue-500 focus:ring focus:ring-blue-200 rounded-xl px-4 py-2 bg-white text-xs font-semibold"
+                                            placeholder="GSTIN (optional)"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-blue-700 mb-1 ml-1 block uppercase tracking-wider">Vendor Address</label>
+                                        <input 
+                                            type="text" 
+                                            value={vendorAddress} 
+                                            onChange={(e) => setVendorAddress(e.target.value)}
+                                            className="w-full border-blue-200 focus:border-blue-500 focus:ring focus:ring-blue-200 rounded-xl px-4 py-2 bg-white text-xs font-semibold"
+                                            placeholder="Address (optional)"
                                         />
                                     </div>
                                 </div>
