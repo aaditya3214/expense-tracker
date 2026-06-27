@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Head, useForm, Link } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import OcrScanner from '@/Components/OcrScanner';
 
 export default function CreateEntry({ vendors = [] }) {
+    const [isOcrOpen, setIsOcrOpen] = useState(false);
     
     const { data, setData, post, processing } = useForm({
         purchased_at: new Date().toISOString().split('T')[0],
@@ -52,15 +54,33 @@ export default function CreateEntry({ vendors = [] }) {
                     </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl shadow-sm mb-6 border-2 border-dashed border-green-400 hover:shadow-md transition-all duration-300">
-                    <h3 className="text-lg font-bold mb-3 text-green-600">Bulk Upload (Upload CSV File)</h3>
-                    <form onSubmit={submitCsv} className="flex flex-col md:flex-row gap-4 items-center">
-                        <input type="file" accept=".csv" onChange={e => setFileData('csv_file', e.target.files[0])} className="border p-2 rounded w-full cursor-pointer" required />
-                        
-                        <button type="submit" disabled={fileProcessing} className="bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700 hover:-translate-y-1 hover:shadow-lg hover:shadow-green-500/30 transition-all duration-300 whitespace-nowrap w-full md:w-auto">
-                            Upload Data
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border-2 border-dashed border-purple-400 hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+                        <div>
+                            <h3 className="text-lg font-bold mb-2 text-purple-600 flex items-center gap-2">📷 Scan Receipt (AI OCR)</h3>
+                            <p className="text-xs text-gray-500 mb-4">Upload an image of a shopping receipt. The AI will automatically extract items, dates, and prices for you to verify.</p>
+                        </div>
+                        <button 
+                            type="button" 
+                            onClick={() => setIsOcrOpen(true)}
+                            className="bg-purple-600 text-white font-bold py-2.5 px-6 rounded-lg hover:bg-purple-700 hover:-translate-y-1 hover:shadow-lg hover:shadow-purple-500/30 transition-all duration-300 text-center w-full"
+                        >
+                            Start Scan
                         </button>
-                    </form>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl shadow-sm border-2 border-dashed border-green-400 hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+                        <div>
+                            <h3 className="text-lg font-bold mb-2 text-green-600 flex items-center gap-2">📄 Bulk Upload (CSV File)</h3>
+                            <p className="text-xs text-gray-500 mb-4">Import a CSV spreadsheet of your store items (such as DMart or Star Bazaar exports) directly into your history.</p>
+                        </div>
+                        <form onSubmit={submitCsv} className="flex flex-col sm:flex-row gap-3 items-center w-full">
+                            <input type="file" accept=".csv" onChange={e => setFileData('csv_file', e.target.files[0])} className="border p-1.5 rounded-lg text-xs w-full cursor-pointer" required />
+                            <button type="submit" disabled={fileProcessing} className="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 text-xs whitespace-nowrap w-full sm:w-auto">
+                                Upload
+                            </button>
+                        </form>
+                    </div>
                 </div>
 
                 <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300">
@@ -114,6 +134,12 @@ export default function CreateEntry({ vendors = [] }) {
                     </button>
                 </form>
             </div>
+
+            <OcrScanner 
+                show={isOcrOpen} 
+                onClose={() => setIsOcrOpen(false)} 
+                defaultVendors={vendors}
+            />
         </AuthenticatedLayout>
     );
 }

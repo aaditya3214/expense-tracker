@@ -17,7 +17,6 @@ Route::get('/', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
-
 // 🔒 SECURITY GUARD & EXPENSES ROUTES
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -30,6 +29,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/expenses/export', [DmartReceiptController::class, 'exportExcel'])->name('expenses.export');
     Route::post('/expenses', [DmartReceiptController::class, 'store']);
     Route::post('/expenses/import', [DmartReceiptController::class, 'import']);
+    Route::post('/expenses/bulk', [DmartReceiptController::class, 'storeBulk'])->name('expenses.store-bulk');
     Route::post('/expenses/clear-all', [DmartReceiptController::class, 'clearAll'])->name('expenses.clear-all');
     Route::delete('/expenses/{id}', [DmartReceiptController::class, 'destroy'])->name('expenses.destroy');
 

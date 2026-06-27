@@ -155,6 +155,36 @@ class DmartReceiptController extends Controller
         return redirect()->route('expenses.index');
     }
 
+    // 5b. BULK SAVE (OCR/Manual)
+    public function storeBulk(Request $request)
+    {
+        $validated = $request->validate([
+            'items' => 'required|array',
+            'items.*.purchased_at' => 'nullable|date',
+            'items.*.hsn' => 'nullable|string',
+            'items.*.particulars' => 'required|string',
+            'items.*.qty_kg' => 'required|numeric',
+            'items.*.unit' => 'required|string',
+            'items.*.n_rate' => 'required|numeric',
+            'items.*.value' => 'required|numeric',
+            'items.*.vendor' => 'required|string',
+        ]);
+
+        foreach ($validated['items'] as $itemData) {
+            $itemData['purchased_at'] = $itemData['purchased_at'] ?? now()->format('Y-m-d');
+
+            // Automatically register vendor if it doesn't exist
+            $request->user()->vendors()->firstOrCreate(
+                ['name' => $itemData['vendor']],
+                ['contact_number' => 'N/A', 'gstin' => 'N/A', 'address' => 'N/A']
+            );
+
+            $request->user()->receipts()->create($itemData);
+        }
+
+        return redirect()->route('expenses.index');
+    }
+
     // 6. CSV BULK IMPORT
     public function import(Request $request)
     {
@@ -213,7 +243,7 @@ class DmartReceiptController extends Controller
     public function clearAll(Request $request)
     {
         $user = $request->user();
-        
+
         // Remove all receipts and vendors associated with this user
         $user->receipts()->delete();
         $user->vendors()->delete();
