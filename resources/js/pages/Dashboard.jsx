@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, Sector } from 'recharts';
-import OcrScanner from '@/Components/OcrScanner';
 
 const formatLocalDate = (dateStr, options) => {
     if (!dateStr) return '';
@@ -158,7 +157,6 @@ const Top5ExpensesChart = ({ data, colors }) => {
 };
 
 export default function Dashboard({ monthlyData, itemData, vendorData, costliestItem, filters, availableMonths, availableYears, totalRecords }) {
-    const [isOcrOpen, setIsOcrOpen] = useState(false);
     const [startDate, setStartDate] = useState(filters.start_date || '');
     const [endDate, setEndDate] = useState(filters.end_date || '');
     const [preset, setPreset] = useState(() => getActivePreset(filters.start_date, filters.end_date));
@@ -317,24 +315,12 @@ export default function Dashboard({ monthlyData, itemData, vendorData, costliest
                         <div className="text-6xl mb-6">🗑️</div>
                         <h2 className="text-3xl font-black text-blue-700 mb-2">No Records Found</h2>
                         <p className="text-gray-600 mb-8 font-medium">Your database is empty. Please upload a CSV, scan a receipt or add an expense manually to see the magic happen!</p>
-                        <div className="flex flex-col sm:flex-row justify-center gap-4">
+                        <div className="flex justify-center">
                             <Link href="/expenses/create" className="w-full sm:w-auto bg-blue-600 text-white font-black text-md py-3.5 px-8 rounded-xl shadow-md hover:bg-blue-700 hover:-translate-y-1 hover:shadow-xl transition-all duration-300 inline-block">
-                                + Add Manually
+                                + Add Expense
                             </Link>
-                            <button 
-                                onClick={() => setIsOcrOpen(true)}
-                                className="w-full sm:w-auto bg-purple-600 text-white font-black text-md py-3.5 px-8 rounded-xl shadow-md hover:bg-purple-700 hover:-translate-y-1 hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2"
-                            >
-                                📷 Scan Receipt (OCR)
-                            </button>
                         </div>
                     </div>
-                    
-                    <OcrScanner 
-                        show={isOcrOpen} 
-                        onClose={() => setIsOcrOpen(false)} 
-                        defaultVendors={[]}
-                    />
                 </div>
             </AuthenticatedLayout>
         );
@@ -483,12 +469,6 @@ export default function Dashboard({ monthlyData, itemData, vendorData, costliest
                     >
                         📄 History
                     </Link>
-                    <button 
-                        onClick={() => setIsOcrOpen(true)}
-                        className="bg-purple-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-purple-700 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 text-sm flex items-center gap-1.5"
-                    >
-                        📷 Scan Receipt
-                    </button>
                     <Link 
                         href="/expenses/create" 
                         className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 text-sm"
@@ -608,12 +588,7 @@ export default function Dashboard({ monthlyData, itemData, vendorData, costliest
                     </ResponsiveContainer>
                 </div>
             </div>
-            
-            <OcrScanner 
-                show={isOcrOpen} 
-                onClose={() => setIsOcrOpen(false)} 
-                defaultVendors={safeVendorData.map(v => v.name)}
-            />
+
         </DashboardWrapper>
     );
 }

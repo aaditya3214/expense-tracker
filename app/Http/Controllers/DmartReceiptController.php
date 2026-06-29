@@ -5,8 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Vendor;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Mindee\Client;
-use Mindee\Product\Receipt\ReceiptV5;
 
 // Authentication facade imported for secure access control
 
@@ -170,66 +168,6 @@ class DmartReceiptController extends Controller
         return redirect()->route('expenses.index');
     }
 
-    // 5b. BULK SAVE (OCR/Manual)
-    public function storeBulk(Request $request)
-    {
-        $validated = $request->validate([
-            'items' => 'required|array',
-            'items.*.purchased_at' => 'nullable|date',
-            'items.*.hsn' => 'nullable|string',
-            'items.*.particulars' => 'required|string',
-            'items.*.qty_kg' => 'required|numeric',
-            'items.*.unit' => 'required|string',
-            'items.*.n_rate' => 'required|numeric|max:99999.99',
-            'items.*.value' => 'required|numeric|max:99999.99',
-            'items.*.vendor' => 'required|string',
-            'items.*.vendor_gstin' => 'nullable|string',
-            'items.*.vendor_address' => 'nullable|string',
-            'items.*.vendor_phone' => 'nullable|string',
-        ]);
-
-        foreach ($validated['items'] as $itemData) {
-            $itemData['purchased_at'] = $itemData['purchased_at'] ?? now()->format('Y-m-d');
-
-            // Automatically register vendor if it doesn't exist, or enrich details if empty
-            $vendor = $request->user()->vendors()->where('name', $itemData['vendor'])->first();
-
-            $gstin = ! empty($itemData['vendor_gstin']) && $itemData['vendor_gstin'] !== 'N/A' ? $itemData['vendor_gstin'] : null;
-            $address = ! empty($itemData['vendor_address']) && $itemData['vendor_address'] !== 'N/A' ? $itemData['vendor_address'] : null;
-            $phone = ! empty($itemData['vendor_phone']) && $itemData['vendor_phone'] !== 'N/A' ? $itemData['vendor_phone'] : null;
-
-            if (! $vendor) {
-                $request->user()->vendors()->create([
-                    'name' => $itemData['vendor'],
-                    'gstin' => $gstin,
-                    'address' => $address,
-                    'contact_number' => $phone ?? 'N/A',
-                ]);
-            } else {
-                $updates = [];
-                if (empty($vendor->gstin) || $vendor->gstin === 'N/A') {
-                    $updates['gstin'] = $gstin;
-                }
-                if (empty($vendor->address) || $vendor->address === 'N/A') {
-                    $updates['address'] = $address;
-                }
-                if (empty($vendor->contact_number) || $vendor->contact_number === 'N/A') {
-                    $updates['contact_number'] = $phone;
-                }
-                if (! empty($updates)) {
-                    $vendor->update($updates);
-                }
-            }
-
-            // Exclude vendor metadata columns before inserting into dmart_receipts
-            $receiptData = collect($itemData)->except(['vendor_gstin', 'vendor_address', 'vendor_phone'])->toArray();
-
-            $request->user()->receipts()->create($receiptData);
-        }
-
-        return redirect()->route('expenses.index');
-    }
-
     // 6. CSV BULK IMPORT
     public function import(Request $request)
     {
@@ -294,102 +232,5 @@ class DmartReceiptController extends Controller
         $user->vendors()->delete();
 
         return redirect()->route('dashboard');
-    }
-
-    // 9. MINDEE OCR PARSING
-    public function parseOcr(Request $request)
-    {
-        $request->validate([
-            'image' => 'required|image|mimes:jpeg,png,jpg,webp|max:10240',
-        ]);
-
-        $apiKey = env('MINDEE_API_KEY');
-        if (empty($apiKey)) {
-            return response()->json([
-                'error' => 'Mindee API Key is not configured in .env file.',
-            ], 500);
-        }
-
-        try {
-            $file = $request->file('image');
-            $filePath = $file->getRealPath();
-
-            $client = new Client($apiKey);
-            $inputSource = $client->sourceFromPath($filePath);
-            $result = $client->parse(ReceiptV5::class, $inputSource);
-
-            $prediction = $result->document->inference->prediction;
-
-            // Log key fields and confidence scores for debugging
-            \Log::info('Mindee Parsed Fields:', [
-                'merchantName' => $prediction->merchantName->value ?? null,
-                'merchantName_confidence' => $prediction->merchantName->confidence ?? null,
-                'date' => $prediction->date->value ?? null,
-                'date_confidence' => $prediction->date->confidence ?? null,
-                'totalAmount' => $prediction->totalAmount->value ?? null,
-                'totalAmount_confidence' => $prediction->totalAmount->confidence ?? null,
-                'merchantAddress' => $prediction->merchantAddress->value ?? null,
-                'merchantPhoneNumber' => $prediction->merchantPhoneNumber->value ?? null,
-                'lineItems_count' => count($prediction->lineItems ?? []),
-            ]);
-
-            $vendorName = $prediction->merchantName->value ?? 'Local Vendor';
-            $date = $prediction->date->value ?? now()->format('Y-m-d');
-            $totalAmount = (float) ($prediction->totalAmount->value ?? 0);
-            $address = $prediction->merchantAddress->value ?? 'N/A';
-            $phone = $prediction->merchantPhoneNumber->value ?? 'N/A';
-
-            // Extract GSTIN / TAX ID if available
-            $gstin = 'N/A';
-
-            $items = [];
-            if (! empty($prediction->lineItems)) {
-                foreach ($prediction->lineItems as $item) {
-                    $description = $item->description ?? 'Unknown Item';
-                    $qty = $item->quantity ?? 1;
-                    $unitPrice = $item->unitPrice ?? 0;
-                    $total = $item->totalAmount ?? ($qty * $unitPrice);
-
-                    $items[] = [
-                        'purchased_at' => $date,
-                        'hsn' => '-',
-                        'particulars' => substr($description, 0, 100),
-                        'qty_kg' => (float) $qty,
-                        'unit' => 'pcs',
-                        'n_rate' => (float) $unitPrice,
-                        'value' => (float) $total,
-                        'vendor' => $vendorName,
-                    ];
-                }
-            }
-
-            // Fallback if no line items were extracted
-            if (empty($items) && $totalAmount > 0) {
-                $items[] = [
-                    'purchased_at' => $date,
-                    'hsn' => '-',
-                    'particulars' => 'Total Receipt Expense',
-                    'qty_kg' => 1,
-                    'unit' => 'pcs',
-                    'n_rate' => $totalAmount,
-                    'value' => $totalAmount,
-                    'vendor' => $vendorName,
-                ];
-            }
-
-            return response()->json([
-                'vendor' => $vendorName,
-                'date' => $date,
-                'gstin' => $gstin,
-                'address' => $address,
-                'phone' => $phone,
-                'items' => $items,
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Mindee parsing failed: '.$e->getMessage(),
-            ], 500);
-        }
     }
 }
